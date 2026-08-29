@@ -1,0 +1,204 @@
+{
+  "companySlug": "awishcometrue",
+  "variant": "girls-adult",
+  "label": "A Wish Come True Girl Sizes (SA-4XLA)",
+  "sourceImageUrl": "https://awishcometrue.com/sizing",
+  "imageHash": "85273a1ff576c6b5",
+  "status": "confirmed",
+  "confirmedBy": "Claude (read from the vendor's published chart) - NOT yet verified by a person",
+  "confirmedAt": "2026-08-28T22:11:28.963Z",
+  "extractionModel": "Read from the HTML tables published at awishcometrue.com/sizing, not from an image.",
+  "chart": {
+    "variant": "girls-adult",
+    "unit": "in",
+    "primaryMeasurement": "girth",
+    "notes": [
+      "3XLA and 4XLA are printed with an asterisk on the vendor's chart; check availability per style.",
+      "Read from the HTML tables published at awishcometrue.com/sizing, not from an image."
+    ],
+    "rows": [
+      {
+        "code": "SA",
+        "label": null,
+        "ordinal": 0,
+        "girth": {
+          "min": 54,
+          "max": 57
+        },
+        "bust": {
+          "min": 32,
+          "max": 34
+        },
+        "waist": {
+          "min": 24,
+          "max": 25
+        },
+        "hips": {
+          "min": 34,
+          "max": 36
+        },
+        "inseam": {
+          "min": 29,
+          "max": 29
+        },
+        "height": null
+      },
+      {
+        "code": "MA",
+        "label": null,
+        "ordinal": 1,
+        "girth": {
+          "min": 57,
+          "max": 60
+        },
+        "bust": {
+          "min": 34,
+          "max": 37
+        },
+        "waist": {
+          "min": 25,
+          "max": 28
+        },
+        "hips": {
+          "min": 36,
+          "max": 39
+        },
+        "inseam": {
+          "min": 30,
+          "max": 30
+        },
+        "height": null
+      },
+      {
+        "code": "LA",
+        "label": null,
+        "ordinal": 2,
+        "girth": {
+          "min": 60,
+          "max": 63
+        },
+        "bust": {
+          "min": 37,
+          "max": 40
+        },
+        "waist": {
+          "min": 28,
+          "max": 31
+        },
+        "hips": {
+          "min": 39,
+          "max": 42
+        },
+        "inseam": {
+          "min": 31,
+          "max": 31
+        },
+        "height": null
+      },
+      {
+        "code": "XLA",
+        "label": null,
+        "ordinal": 3,
+        "girth": {
+          "min": 63,
+          "max": 66
+        },
+        "bust": {
+          "min": 40,
+          "max": 44
+        },
+        "waist": {
+          "min": 31,
+          "max": 35
+        },
+        "hips": {
+          "min": 42,
+          "max": 46
+        },
+        "inseam": {
+          "min": 32,
+          "max": 32
+        },
+        "height": null
+      },
+      {
+        "code": "XXLA",
+        "label": null,
+        "ordinal": 4,
+        "girth": {
+          "min": 66,
+          "max": 69
+        },
+        "bust": {
+          "min": 44,
+          "max": 47
+        },
+        "waist": {
+          "min": 35,
+          "max": 39
+        },
+        "hips": {
+          "min": 46,
+          "max": 49
+        },
+        "inseam": {
+          "min": 32,
+          "max": 32
+        },
+        "height": null
+      },
+      {
+        "code": "3XLA",
+        "label": null,
+        "ordinal": 5,
+        "girth": {
+          "min": 69,
+          "max": 72
+        },
+        "bust": {
+          "min": 47,
+          "max": 50
+        },
+        "waist": {
+          "min": 39,
+          "max": 44
+        },
+        "hips": {
+          "min": 49,
+          "max": 54
+        },
+        "inseam": {
+          "min": 32,
+          "max": 32
+        },
+        "height": null
+      },
+      {
+        "code": "4XLA",
+        "label": null,
+        "ordinal": 6,
+        "girth": {
+          "min": 72,
+          "max": 75
+        },
+        "bust": {
+          "min": 50,
+          "max": 53
+        },
+        "waist": {
+          "min": 44,
+          "max": 48
+        },
+        "hips": {
+          "min": 54,
+          "max": 58
+        },
+        "inseam": {
+          "min": 32,
+          "max": 32
+        },
+        "height": null
+      }
+    ]
+  }
+}

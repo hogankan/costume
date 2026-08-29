@@ -1,0 +1,308 @@
+{
+  "companySlug": "awishcometrue",
+  "variant": "boys",
+  "label": "A Wish Come True Boy Sizes",
+  "sourceImageUrl": "https://awishcometrue.com/sizing",
+  "imageHash": "f97f867b349c8b98",
+  "status": "confirmed",
+  "confirmedBy": "Claude (read from the vendor's published chart) - NOT yet verified by a person",
+  "confirmedAt": "2026-08-28T22:11:28.966Z",
+  "extractionModel": "Read from the HTML tables published at awishcometrue.com/sizing, not from an image.",
+  "chart": {
+    "variant": "boys",
+    "unit": "in",
+    "primaryMeasurement": "girth",
+    "notes": [
+      "Unlike Weissman's boys chart, this one prints girth, so girth decides the size.",
+      "Read from the HTML tables published at awishcometrue.com/sizing, not from an image."
+    ],
+    "rows": [
+      {
+        "code": "2T",
+        "label": null,
+        "ordinal": 0,
+        "girth": {
+          "min": 34,
+          "max": 37
+        },
+        "bust": {
+          "min": 18,
+          "max": 20
+        },
+        "waist": {
+          "min": 18,
+          "max": 20
+        },
+        "hips": {
+          "min": 18,
+          "max": 20
+        },
+        "inseam": {
+          "min": 13,
+          "max": 13
+        },
+        "height": null
+      },
+      {
+        "code": "XXSC",
+        "label": null,
+        "ordinal": 1,
+        "girth": {
+          "min": 37,
+          "max": 39
+        },
+        "bust": {
+          "min": 20,
+          "max": 21
+        },
+        "waist": {
+          "min": 20,
+          "max": 21
+        },
+        "hips": {
+          "min": 20,
+          "max": 21
+        },
+        "inseam": {
+          "min": 15,
+          "max": 15
+        },
+        "height": null
+      },
+      {
+        "code": "XSC",
+        "label": null,
+        "ordinal": 2,
+        "girth": {
+          "min": 39,
+          "max": 43
+        },
+        "bust": {
+          "min": 21,
+          "max": 23
+        },
+        "waist": {
+          "min": 21,
+          "max": 22
+        },
+        "hips": {
+          "min": 21,
+          "max": 23
+        },
+        "inseam": {
+          "min": 18,
+          "max": 18
+        },
+        "height": null
+      },
+      {
+        "code": "SC",
+        "label": null,
+        "ordinal": 3,
+        "girth": {
+          "min": 43,
+          "max": 47
+        },
+        "bust": {
+          "min": 23,
+          "max": 26
+        },
+        "waist": {
+          "min": 22,
+          "max": 24
+        },
+        "hips": {
+          "min": 23,
+          "max": 28
+        },
+        "inseam": {
+          "min": 21,
+          "max": 21
+        },
+        "height": null
+      },
+      {
+        "code": "MC",
+        "label": null,
+        "ordinal": 4,
+        "girth": {
+          "min": 47,
+          "max": 51
+        },
+        "bust": {
+          "min": 26,
+          "max": 29
+        },
+        "waist": {
+          "min": 23,
+          "max": 24
+        },
+        "hips": {
+          "min": 28,
+          "max": 30
+        },
+        "inseam": {
+          "min": 25,
+          "max": 25
+        },
+        "height": null
+      },
+      {
+        "code": "LC",
+        "label": null,
+        "ordinal": 5,
+        "girth": {
+          "min": 51,
+          "max": 57
+        },
+        "bust": {
+          "min": 29,
+          "max": 34
+        },
+        "waist": {
+          "min": 24,
+          "max": 28
+        },
+        "hips": {
+          "min": 30,
+          "max": 34
+        },
+        "inseam": {
+          "min": 29,
+          "max": 29
+        },
+        "height": null
+      },
+      {
+        "code": "SA",
+        "label": null,
+        "ordinal": 6,
+        "girth": {
+          "min": 57,
+          "max": 60
+        },
+        "bust": {
+          "min": 34,
+          "max": 37
+        },
+        "waist": {
+          "min": 28,
+          "max": 31
+        },
+        "hips": {
+          "min": 34,
+          "max": 37
+        },
+        "inseam": {
+          "min": 32,
+          "max": 32
+        },
+        "height": null
+      },
+      {
+        "code": "MA",
+        "label": null,
+        "ordinal": 7,
+        "girth": {
+          "min": 60,
+          "max": 63
+        },
+        "bust": {
+          "min": 37,
+          "max": 40
+        },
+        "waist": {
+          "min": 31,
+          "max": 34
+        },
+        "hips": {
+          "min": 37,
+          "max": 40
+        },
+        "inseam": {
+          "min": 34,
+          "max": 34
+        },
+        "height": null
+      },
+      {
+        "code": "LA",
+        "label": null,
+        "ordinal": 8,
+        "girth": {
+          "min": 63,
+          "max": 66
+        },
+        "bust": {
+          "min": 40,
+          "max": 44
+        },
+        "waist": {
+          "min": 34,
+          "max": 38
+        },
+        "hips": {
+          "min": 40,
+          "max": 44
+        },
+        "inseam": {
+          "min": 35,
+          "max": 35
+        },
+        "height": null
+      },
+      {
+        "code": "XLA",
+        "label": null,
+        "ordinal": 9,
+        "girth": {
+          "min": 66,
+          "max": 69
+        },
+        "bust": {
+          "min": 44,
+          "max": 47
+        },
+        "waist": {
+          "min": 38,
+          "max": 41
+        },
+        "hips": {
+          "min": 44,
+          "max": 47
+        },
+        "inseam": {
+          "min": 36,
+          "max": 36
+        },
+        "height": null
+      },
+      {
+        "code": "XXLA",
+        "label": null,
+        "ordinal": 10,
+        "girth": {
+          "min": 69,
+          "max": 73
+        },
+        "bust": {
+          "min": 47,
+          "max": 50
+        },
+        "waist": {
+          "min": 41,
+          "max": 44
+        },
+        "hips": {
+          "min": 47,
+          "max": 50
+        },
+        "inseam": {
+          "min": 36,
+          "max": 36
+        },
+        "height": null
+      }
+    ]
+  }
+}

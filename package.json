@@ -6,21 +6,49 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio",
+    "charts:check": "tsx scripts/check-manifest.ts",
+    "charts:seed": "tsx scripts/seed-charts.ts --from-catalog",
+    "charts:extract": "tsx scripts/extract-chart.ts",
+    "demo": "tsx scripts/demo.ts",
+    "catalog:crawl": "tsx scripts/crawl-catalog.ts",
+    "charts:validate": "tsx scripts/validate-charts.ts",
+    "charts:crosscheck": "tsx scripts/crosscheck-laylas.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.121.0",
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "^7.10.0",
+    "cheerio": "^1.2.0",
     "next": "16.3.3",
+    "pg": "^8.23.0",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "sharp": "^0.35.4",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "^4.1.11",
+    "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.3.3",
+    "playwright": "^1.62.1",
+    "prisma": "^7.10.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "tsx": "^4.23.12",
+    "typescript": "^5",
+    "vitest": "^4.1.11"
   }
 }

@@ -1,0 +1,364 @@
+{
+  "companySlug": "revolution",
+  "variant": "costumechart",
+  "label": "Revolution Female Measurements (inches)",
+  "sourceImageUrl": "https://cdn11.bigcommerce.com/s-m12047qc85/product_images/uploaded_images/costumechart.jpg",
+  "imageHash": "754c07cabee16748",
+  "status": "confirmed",
+  "extractedAt": "2026-08-28T02:05:45.149Z",
+  "extractionModel": "read from the chart image in-session, not via the API",
+  "chart": {
+    "variant": "female",
+    "unit": "in",
+    "notes": [
+      "XLC and XXLC sizes are made to fit a larger child, not a petite adult.",
+      "When trying to decide which sizes to order, girth should be the most important measurement.",
+      "Girth, as Revolution defines it: measure from the centre of one shoulder, down through the crotch, and back up to the same shoulder.",
+      "Measure the dancer while she is wearing a leotard, for the most accurate measurements.",
+      "Verified: every value re-read from the vendor chart image (13 sizes x 5 measurements, 0 mismatches)."
+    ],
+    "rows": [
+      {
+        "code": "XSC",
+        "label": "X-Small Child",
+        "ordinal": 0,
+        "girth": {
+          "min": 37,
+          "max": 39
+        },
+        "bust": {
+          "min": 21,
+          "max": 23
+        },
+        "waist": {
+          "min": 18,
+          "max": 20
+        },
+        "hips": {
+          "min": 22,
+          "max": 24
+        },
+        "inseam": {
+          "min": 18,
+          "max": 18
+        },
+        "height": null
+      },
+      {
+        "code": "SC",
+        "label": "Small Child",
+        "ordinal": 1,
+        "girth": {
+          "min": 40,
+          "max": 43
+        },
+        "bust": {
+          "min": 24,
+          "max": 26
+        },
+        "waist": {
+          "min": 21,
+          "max": 22
+        },
+        "hips": {
+          "min": 25,
+          "max": 27
+        },
+        "inseam": {
+          "min": 20,
+          "max": 20
+        },
+        "height": null
+      },
+      {
+        "code": "MC",
+        "label": "Medium Child",
+        "ordinal": 2,
+        "girth": {
+          "min": 44,
+          "max": 48
+        },
+        "bust": {
+          "min": 27,
+          "max": 29
+        },
+        "waist": {
+          "min": 23,
+          "max": 24
+        },
+        "hips": {
+          "min": 28,
+          "max": 30
+        },
+        "inseam": {
+          "min": 25,
+          "max": 25
+        },
+        "height": null
+      },
+      {
+        "code": "LC",
+        "label": "Large Child",
+        "ordinal": 3,
+        "girth": {
+          "min": 49,
+          "max": 52
+        },
+        "bust": {
+          "min": 30,
+          "max": 32
+        },
+        "waist": {
+          "min": 25,
+          "max": 26
+        },
+        "hips": {
+          "min": 31,
+          "max": 33
+        },
+        "inseam": {
+          "min": 28,
+          "max": 28
+        },
+        "height": null
+      },
+      {
+        "code": "XLC",
+        "label": "X-Large Child",
+        "ordinal": 4,
+        "girth": {
+          "min": 53,
+          "max": 55
+        },
+        "bust": {
+          "min": 33,
+          "max": 35
+        },
+        "waist": {
+          "min": 27,
+          "max": 30
+        },
+        "hips": {
+          "min": 34,
+          "max": 37
+        },
+        "inseam": {
+          "min": 28,
+          "max": 28
+        },
+        "height": null
+      },
+      {
+        "code": "XXLC",
+        "label": "XX-Large Child",
+        "ordinal": 5,
+        "girth": {
+          "min": 56,
+          "max": 58
+        },
+        "bust": {
+          "min": 35,
+          "max": 37
+        },
+        "waist": {
+          "min": 31,
+          "max": 34
+        },
+        "hips": {
+          "min": 38,
+          "max": 40
+        },
+        "inseam": {
+          "min": 28,
+          "max": 28
+        },
+        "height": null
+      },
+      {
+        "code": "PA",
+        "label": "Petite Adult",
+        "ordinal": 6,
+        "girth": {
+          "min": 53,
+          "max": 57
+        },
+        "bust": {
+          "min": 31,
+          "max": 33
+        },
+        "waist": {
+          "min": 24,
+          "max": 26
+        },
+        "hips": {
+          "min": 32,
+          "max": 34
+        },
+        "inseam": {
+          "min": 30,
+          "max": 30
+        },
+        "height": null
+      },
+      {
+        "code": "SA",
+        "label": "Small Adult",
+        "ordinal": 7,
+        "girth": {
+          "min": 55,
+          "max": 58
+        },
+        "bust": {
+          "min": 33,
+          "max": 35
+        },
+        "waist": {
+          "min": 24,
+          "max": 26
+        },
+        "hips": {
+          "min": 34,
+          "max": 36
+        },
+        "inseam": {
+          "min": 31,
+          "max": 31
+        },
+        "height": null
+      },
+      {
+        "code": "MA",
+        "label": "Medium Adult",
+        "ordinal": 8,
+        "girth": {
+          "min": 59,
+          "max": 61
+        },
+        "bust": {
+          "min": 35,
+          "max": 37
+        },
+        "waist": {
+          "min": 27,
+          "max": 29
+        },
+        "hips": {
+          "min": 37,
+          "max": 39
+        },
+        "inseam": {
+          "min": 32,
+          "max": 32
+        },
+        "height": null
+      },
+      {
+        "code": "LA",
+        "label": "Large Adult",
+        "ordinal": 9,
+        "girth": {
+          "min": 62,
+          "max": 64
+        },
+        "bust": {
+          "min": 38,
+          "max": 40
+        },
+        "waist": {
+          "min": 30,
+          "max": 32
+        },
+        "hips": {
+          "min": 40,
+          "max": 42
+        },
+        "inseam": {
+          "min": 33,
+          "max": 33
+        },
+        "height": null
+      },
+      {
+        "code": "XLA",
+        "label": "X-Large Adult",
+        "ordinal": 10,
+        "girth": {
+          "min": 65,
+          "max": 67
+        },
+        "bust": {
+          "min": 41,
+          "max": 43
+        },
+        "waist": {
+          "min": 33,
+          "max": 35
+        },
+        "hips": {
+          "min": 43,
+          "max": 45
+        },
+        "inseam": {
+          "min": 33,
+          "max": 33
+        },
+        "height": null
+      },
+      {
+        "code": "XXLA",
+        "label": "XX-Large Adult",
+        "ordinal": 11,
+        "girth": {
+          "min": 68,
+          "max": 70
+        },
+        "bust": {
+          "min": 44,
+          "max": 48
+        },
+        "waist": {
+          "min": 36,
+          "max": 42
+        },
+        "hips": {
+          "min": 46,
+          "max": 51
+        },
+        "inseam": {
+          "min": 33,
+          "max": 33
+        },
+        "height": null
+      },
+      {
+        "code": "XXXLA",
+        "label": "XXX-Large Adult",
+        "ordinal": 12,
+        "girth": {
+          "min": 71,
+          "max": 73
+        },
+        "bust": {
+          "min": 49,
+          "max": 51
+        },
+        "waist": {
+          "min": 43,
+          "max": 50
+        },
+        "hips": {
+          "min": 52,
+          "max": 54
+        },
+        "inseam": {
+          "min": 33,
+          "max": 33
+        },
+        "height": null
+      }
+    ],
+    "primaryMeasurement": "girth"
+  },
+  "confirmedBy": "Claude - re-read from the vendor chart image, all values matched",
+  "confirmedAt": "2026-08-28T02:06:09.185Z"
+}

@@ -1,0 +1,256 @@
+{
+  "companySlug": "weissman",
+  "variant": "boys",
+  "label": "Weissman Boys Size Chart (inches)",
+  "sourceImageUrl": "https://d2mf5zk7fvq4ou.cloudfront.net/images/size-charts/child/inches/wts-size-chart-boys-in.jpg",
+  "imageHash": "520e016c51b587c9",
+  "status": "confirmed",
+  "confirmedBy": "Claude (read from the vendor chart image) - NOT yet verified by a person",
+  "confirmedAt": "2026-08-28T22:09:30.272Z",
+  "extractionModel": "read from the chart image in-session, not via the API",
+  "chart": {
+    "variant": "boys",
+    "unit": "in",
+    "primaryMeasurement": "bust",
+    "notes": [
+      "This chart prints no girth column - boys costumes are two-piece - so chest decides the size.",
+      "Transcribed by Claude from the vendor chart image during a session; verify against the image before ordering."
+    ],
+    "rows": [
+      {
+        "code": "T",
+        "label": null,
+        "ordinal": 0,
+        "girth": {
+          "min": null,
+          "max": null
+        },
+        "bust": {
+          "min": 20,
+          "max": 21
+        },
+        "waist": {
+          "min": 20,
+          "max": 21
+        },
+        "hips": {
+          "min": 20.5,
+          "max": 21.5
+        },
+        "inseam": {
+          "min": 13,
+          "max": 14.5
+        },
+        "height": null
+      },
+      {
+        "code": "XXSC",
+        "label": null,
+        "ordinal": 1,
+        "girth": {
+          "min": null,
+          "max": null
+        },
+        "bust": {
+          "min": 21,
+          "max": 22
+        },
+        "waist": {
+          "min": 21,
+          "max": 22
+        },
+        "hips": {
+          "min": 21.5,
+          "max": 22.5
+        },
+        "inseam": {
+          "min": 14.5,
+          "max": 16
+        },
+        "height": null
+      },
+      {
+        "code": "XSC",
+        "label": null,
+        "ordinal": 2,
+        "girth": {
+          "min": null,
+          "max": null
+        },
+        "bust": {
+          "min": 22,
+          "max": 24
+        },
+        "waist": {
+          "min": 22,
+          "max": 23
+        },
+        "hips": {
+          "min": 22.5,
+          "max": 25
+        },
+        "inseam": {
+          "min": 16,
+          "max": 19.5
+        },
+        "height": null
+      },
+      {
+        "code": "SC",
+        "label": null,
+        "ordinal": 3,
+        "girth": {
+          "min": null,
+          "max": null
+        },
+        "bust": {
+          "min": 24,
+          "max": 26
+        },
+        "waist": {
+          "min": 23,
+          "max": 24
+        },
+        "hips": {
+          "min": 25,
+          "max": 27
+        },
+        "inseam": {
+          "min": 19.5,
+          "max": 22.5
+        },
+        "height": null
+      },
+      {
+        "code": "IC",
+        "label": null,
+        "ordinal": 4,
+        "girth": {
+          "min": null,
+          "max": null
+        },
+        "bust": {
+          "min": 26,
+          "max": 27.5
+        },
+        "waist": {
+          "min": 24,
+          "max": 25
+        },
+        "hips": {
+          "min": 27,
+          "max": 28.5
+        },
+        "inseam": {
+          "min": 22.5,
+          "max": 25
+        },
+        "height": null
+      },
+      {
+        "code": "MC",
+        "label": null,
+        "ordinal": 5,
+        "girth": {
+          "min": null,
+          "max": null
+        },
+        "bust": {
+          "min": 27.5,
+          "max": 29.5
+        },
+        "waist": {
+          "min": 25,
+          "max": 27.5
+        },
+        "hips": {
+          "min": 28.5,
+          "max": 31.5
+        },
+        "inseam": {
+          "min": 25,
+          "max": 28.5
+        },
+        "height": null
+      },
+      {
+        "code": "LC",
+        "label": null,
+        "ordinal": 6,
+        "girth": {
+          "min": null,
+          "max": null
+        },
+        "bust": {
+          "min": 29.5,
+          "max": 31.5
+        },
+        "waist": {
+          "min": 27.5,
+          "max": 29
+        },
+        "hips": {
+          "min": 31.5,
+          "max": 33
+        },
+        "inseam": {
+          "min": 28.5,
+          "max": 30.5
+        },
+        "height": null
+      },
+      {
+        "code": "XLC",
+        "label": null,
+        "ordinal": 7,
+        "girth": {
+          "min": null,
+          "max": null
+        },
+        "bust": {
+          "min": 31.5,
+          "max": 34.5
+        },
+        "waist": {
+          "min": 29,
+          "max": 32
+        },
+        "hips": {
+          "min": 33,
+          "max": 36
+        },
+        "inseam": {
+          "min": 30.5,
+          "max": 32
+        },
+        "height": null
+      },
+      {
+        "code": "XXLC",
+        "label": null,
+        "ordinal": 8,
+        "girth": {
+          "min": null,
+          "max": null
+        },
+        "bust": {
+          "min": 34.5,
+          "max": 36
+        },
+        "waist": {
+          "min": 32,
+          "max": 33.5
+        },
+        "hips": {
+          "min": 36,
+          "max": 37.5
+        },
+        "inseam": {
+          "min": 30.5,
+          "max": 32
+        },
+        "height": null
+      }
+    ]
+  }
+}

@@ -1,0 +1,256 @@
+{
+  "companySlug": "weissman",
+  "variant": "womens",
+  "label": "Weissman Womens Size Chart (inches)",
+  "sourceImageUrl": "https://d2mf5zk7fvq4ou.cloudfront.net/images/size-charts/adult/inches/wts-size-chart-womens-in.jpg",
+  "imageHash": "900bd5375f5bb555",
+  "status": "confirmed",
+  "confirmedBy": "Claude (read from the vendor chart image) - NOT yet verified by a person",
+  "confirmedAt": "2026-08-28T22:09:30.274Z",
+  "extractionModel": "read from the chart image in-session, not via the API",
+  "chart": {
+    "variant": "womens",
+    "unit": "in",
+    "primaryMeasurement": "girth",
+    "notes": [
+      "The first column is printed as \"XSA/PA\" and is stored here as XSA. If a costume lists PA, confirm which code Weissman uses on the product page.",
+      "Transcribed by Claude from the vendor chart image during a session; verify against the image before ordering."
+    ],
+    "rows": [
+      {
+        "code": "XSA",
+        "label": "0/2 (printed XSA/PA)",
+        "ordinal": 0,
+        "girth": {
+          "min": 55.5,
+          "max": 57.5
+        },
+        "bust": {
+          "min": 32,
+          "max": 34
+        },
+        "waist": {
+          "min": 24,
+          "max": 26
+        },
+        "hips": {
+          "min": 33,
+          "max": 35
+        },
+        "inseam": {
+          "min": 29,
+          "max": 33
+        },
+        "height": null
+      },
+      {
+        "code": "XSAL",
+        "label": "0/2 Long",
+        "ordinal": 1,
+        "girth": {
+          "min": 57.5,
+          "max": 60
+        },
+        "bust": {
+          "min": 32,
+          "max": 34
+        },
+        "waist": {
+          "min": 24,
+          "max": 26
+        },
+        "hips": {
+          "min": 33,
+          "max": 35
+        },
+        "inseam": {
+          "min": 32,
+          "max": 35
+        },
+        "height": null
+      },
+      {
+        "code": "SA",
+        "label": "4/6",
+        "ordinal": 2,
+        "girth": {
+          "min": 57.5,
+          "max": 60
+        },
+        "bust": {
+          "min": 34,
+          "max": 36
+        },
+        "waist": {
+          "min": 26,
+          "max": 28
+        },
+        "hips": {
+          "min": 35,
+          "max": 37
+        },
+        "inseam": {
+          "min": 29,
+          "max": 33
+        },
+        "height": null
+      },
+      {
+        "code": "SAL",
+        "label": "4/6 Long",
+        "ordinal": 3,
+        "girth": {
+          "min": 60,
+          "max": 62
+        },
+        "bust": {
+          "min": 34,
+          "max": 36
+        },
+        "waist": {
+          "min": 26,
+          "max": 28
+        },
+        "hips": {
+          "min": 35,
+          "max": 37
+        },
+        "inseam": {
+          "min": 32,
+          "max": 35
+        },
+        "height": null
+      },
+      {
+        "code": "MA",
+        "label": "8/10",
+        "ordinal": 4,
+        "girth": {
+          "min": 60,
+          "max": 62
+        },
+        "bust": {
+          "min": 36,
+          "max": 39
+        },
+        "waist": {
+          "min": 28,
+          "max": 31
+        },
+        "hips": {
+          "min": 37,
+          "max": 40
+        },
+        "inseam": {
+          "min": 29,
+          "max": 33
+        },
+        "height": null
+      },
+      {
+        "code": "LA",
+        "label": "12/14",
+        "ordinal": 5,
+        "girth": {
+          "min": 62,
+          "max": 63
+        },
+        "bust": {
+          "min": 39,
+          "max": 42
+        },
+        "waist": {
+          "min": 31,
+          "max": 34
+        },
+        "hips": {
+          "min": 40,
+          "max": 44
+        },
+        "inseam": {
+          "min": 29,
+          "max": 33
+        },
+        "height": null
+      },
+      {
+        "code": "XLA",
+        "label": "16/18",
+        "ordinal": 6,
+        "girth": {
+          "min": 63,
+          "max": 65
+        },
+        "bust": {
+          "min": 42,
+          "max": 45
+        },
+        "waist": {
+          "min": 34,
+          "max": 38
+        },
+        "hips": {
+          "min": 44,
+          "max": 48
+        },
+        "inseam": {
+          "min": 29,
+          "max": 33
+        },
+        "height": null
+      },
+      {
+        "code": "XXLA",
+        "label": "20",
+        "ordinal": 7,
+        "girth": {
+          "min": 65,
+          "max": 68
+        },
+        "bust": {
+          "min": 45,
+          "max": 48
+        },
+        "waist": {
+          "min": 38,
+          "max": 43
+        },
+        "hips": {
+          "min": 48,
+          "max": 52
+        },
+        "inseam": {
+          "min": 29,
+          "max": 33
+        },
+        "height": null
+      },
+      {
+        "code": "XXXLA",
+        "label": "22/24",
+        "ordinal": 8,
+        "girth": {
+          "min": 68,
+          "max": 71
+        },
+        "bust": {
+          "min": 48,
+          "max": 52
+        },
+        "waist": {
+          "min": 43,
+          "max": 47.5
+        },
+        "hips": {
+          "min": 52,
+          "max": 56
+        },
+        "inseam": {
+          "min": 29,
+          "max": 33
+        },
+        "height": null
+      }
+    ]
+  }
+}

@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.env
+
+# demo output
+tmp/
+
+# local Claude Code settings
+.claude/

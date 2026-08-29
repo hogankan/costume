@@ -1,0 +1,308 @@
+// Costume sizing & ordering app.
+//
+// Two structural decisions drive this schema:
+//
+//  1. SizeChart hangs off Company, NOT Costume. Each vendor publishes a small
+//     fixed set of charts (Weissman has 8; Revolution serves one shared chart
+//     across its catalogue), so charts are extracted and human-confirmed once
+//     into a library and every costume merely references one. Adding a costume
+//     never triggers another extraction.
+//
+//  2. The ordering unit is the class, not the dancer. A studio uploads a class
+//     roster and the whole class gets one costume, though individual dancers may
+//     receive different colours of it - hence Enrollment.colorwayId.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------- tenancy ---
+
+model Studio {
+  id             String          @id @default(cuid())
+  name           String
+  createdAt      DateTime        @default(now())
+  users          User[]
+  seasons        Season[]
+  dancers        Dancer[]
+  columnMappings ColumnMapping[]
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  role      UserRole @default(STAFF)
+  studioId  String
+  studio    Studio   @relation(fields: [studioId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([studioId])
+}
+
+enum UserRole {
+  OWNER
+  STAFF
+  /// Maintains the shared size-chart library across all studios.
+  ADMIN
+}
+
+model Season {
+  id        String        @id @default(cuid())
+  studioId  String
+  studio    Studio        @relation(fields: [studioId], references: [id], onDelete: Cascade)
+  label     String // e.g. "2026-2027"
+  createdAt DateTime      @default(now())
+  costumes  Costume[]
+  classes   DanceClass[]
+  measures  Measurement[]
+
+  @@unique([studioId, label])
+}
+
+// ---------------------------------------------------- shared chart library ---
+
+model Company {
+  id      String      @id @default(cuid())
+  slug    String      @unique // revolution | weissman | awishcometrue | laylas
+  name    String
+  baseUrl String
+  charts  SizeChart[]
+  costume Costume[]
+}
+
+/// One printed size chart, extracted from the vendor's chart image and confirmed
+/// by a human exactly once. Shared by every costume that uses it.
+model SizeChart {
+  id        String      @id @default(cuid())
+  companyId String
+  company   Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  variant   String // child-girls | child-boys | adult-womens | ...
+  label     String?
+
+  sourceImageUrl String
+  /// sha256 of the chart image bytes. Dedupes extraction: a chart already
+  /// confirmed under this hash is reused rather than re-read.
+  imageHash      String  @unique
+
+  /// The size-code vocabulary this chart covers. A costume's available sizes are
+  /// matched against this to work out which chart applies, so no separate
+  /// costume-to-chart lookup table is needed.
+  sizeCodes String[]
+
+  status      ChartStatus @default(DRAFT)
+  confirmedBy String?
+  confirmedAt DateTime?
+  /// Vendor caveats that no numeric matcher could infer, e.g. Revolution's note
+  /// that XLC and XXLC fit a larger child rather than a petite adult.
+  notes       String[]
+
+  extractionModel String?
+  createdAt       DateTime       @default(now())
+  rows            SizeChartRow[]
+  costumes        Costume[]
+
+  @@index([companyId, variant])
+}
+
+enum ChartStatus {
+  DRAFT
+  CONFIRMED
+}
+
+model SizeChartRow {
+  id      String    @id @default(cuid())
+  chartId String
+  chart   SizeChart @relation(fields: [chartId], references: [id], onDelete: Cascade)
+
+  code    String // "MC". Long variants such as "MCL" are their own codes.
+  label   String?
+  /// Position within the chart; defines what "the next size up" means.
+  ordinal Int
+
+  // Nulls mean the chart printed an open end, not zero.
+  girthMin  Float?
+  girthMax  Float?
+  bustMin   Float?
+  bustMax   Float?
+  waistMin  Float?
+  waistMax  Float?
+  hipsMin   Float?
+  hipsMax   Float?
+  inseamMin Float?
+  inseamMax Float?
+  heightMin Float?
+  heightMax Float?
+
+  @@unique([chartId, code])
+  @@index([chartId, ordinal])
+}
+
+// -------------------------------------------------------- season catalogue ---
+
+model Costume {
+  id          String  @id @default(cuid())
+  seasonId    String
+  season      Season  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  companyId   String
+  company     Company @relation(fields: [companyId], references: [id])
+  styleNumber String
+  name        String
+  productUrl  String?
+
+  /// Codes orderable for THIS costume, which may be a subset of the chart's.
+  /// Matching runs against the intersection so the app cannot recommend a size
+  /// that cannot actually be ordered.
+  availableSizes String[]
+
+  chartId String?
+  chart   SizeChart? @relation(fields: [chartId], references: [id])
+  /// Set when the size codes matched more than one chart and a human picked.
+  chartResolvedBy String?
+
+  colorways Colorway[]
+  classes   DanceClass[]
+  createdAt DateTime     @default(now())
+
+  @@unique([seasonId, companyId, styleNumber])
+  @@index([seasonId])
+}
+
+model Colorway {
+  id        String  @id @default(cuid())
+  costumeId String
+  costume   Costume @relation(fields: [costumeId], references: [id], onDelete: Cascade)
+  name      String // "Ruby"
+  code      String?
+
+  enrollments   Enrollment[]
+  defaultForClasses DanceClass[] @relation("ClassDefaultColorway")
+
+  @@unique([costumeId, name])
+}
+
+// ---------------------------------------------------------------- rosters ---
+
+model Dancer {
+  id       String @id @default(cuid())
+  studioId String
+  studio   Studio @relation(fields: [studioId], references: [id], onDelete: Cascade)
+  name     String
+  /// Studio's own student identifier when they have one; far more reliable than
+  /// name matching across class sheets.
+  externalId String?
+  notes      String?
+
+  measurements Measurement[]
+  enrollments  Enrollment[]
+  assignments  Assignment[]
+
+  @@unique([studioId, externalId])
+  @@index([studioId, name])
+}
+
+model Measurement {
+  id       String @id @default(cuid())
+  dancerId String
+  dancer   Dancer @relation(fields: [dancerId], references: [id], onDelete: Cascade)
+  seasonId String
+  season   Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+
+  girth  Float
+  bust   Float?
+  waist  Float?
+  hips   Float?
+  inseam Float?
+  height Float?
+  /// Values are stored as captured; IN or CM.
+  unit   Unit   @default(IN)
+
+  measuredAt DateTime @default(now())
+
+  @@unique([dancerId, seasonId])
+}
+
+enum Unit {
+  IN
+  CM
+}
+
+model DanceClass {
+  id       String @id @default(cuid())
+  seasonId String
+  season   Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  name     String // "Tues 5pm Junior Jazz"
+
+  costumeId String?
+  costume   Costume? @relation(fields: [costumeId], references: [id])
+
+  defaultColorwayId String?
+  defaultColorway   Colorway? @relation("ClassDefaultColorway", fields: [defaultColorwayId], references: [id])
+
+  enrollments Enrollment[]
+  assignments Assignment[]
+  createdAt   DateTime     @default(now())
+
+  @@unique([seasonId, name])
+}
+
+model Enrollment {
+  id       String     @id @default(cuid())
+  classId  String
+  class    DanceClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  dancerId String
+  dancer   Dancer     @relation(fields: [dancerId], references: [id], onDelete: Cascade)
+  /// Overrides the class default so a soloist can take a contrasting colour.
+  colorwayId String?
+  colorway   Colorway? @relation(fields: [colorwayId], references: [id])
+
+  @@unique([classId, dancerId])
+}
+
+// --------------------------------------------------------------- results ---
+
+model Assignment {
+  id       String     @id @default(cuid())
+  classId  String
+  class    DanceClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  dancerId String
+  dancer   Dancer     @relation(fields: [dancerId], references: [id], onDelete: Cascade)
+
+  recommendedSize String
+  ordinal         Int
+  rawGirth        Float
+  matchedGirth    Float
+  rationale       String
+  flags           Json
+
+  /// A studio owner's judgement must be able to beat the algorithm - and be
+  /// auditable afterwards, which is why a reason is stored alongside.
+  overrideSize   String?
+  overrideReason String?
+  overrideBy     String?
+  overrideAt     DateTime?
+
+  computedAt DateTime @default(now())
+
+  @@unique([classId, dancerId])
+  @@index([classId])
+}
+
+/// Remembered spreadsheet column mapping, so a studio maps its sheet once and
+/// every later class import is a single click.
+model ColumnMapping {
+  id       String @id @default(cuid())
+  studioId String
+  studio   Studio @relation(fields: [studioId], references: [id], onDelete: Cascade)
+  /// Stable hash of the sheet's header row.
+  sourceFingerprint String
+  label             String?
+  map               Json
+  createdAt         DateTime @default(now())
+
+  @@unique([studioId, sourceFingerprint])
+}

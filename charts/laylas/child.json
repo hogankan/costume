@@ -1,0 +1,203 @@
+{
+  "companySlug": "laylas",
+  "variant": "child",
+  "label": "Layla's Child Costume/Bodywear Size Chart",
+  "sourceImageUrl": "https://laylasdance.com/media/catalog/category/Laylas_Size_Chart.jpg",
+  "imageHash": "d885c7c1d7ab38c4",
+  "status": "confirmed",
+  "confirmedBy": "Claude (read from the vendor's published chart) - NOT yet verified by a person",
+  "confirmedAt": "2026-08-28T22:11:28.969Z",
+  "extractionModel": "Transcribed by Claude from the vendor chart image during a session; verify against the image before ordering.",
+  "chart": {
+    "variant": "child",
+    "unit": "in",
+    "primaryMeasurement": "girth",
+    "notes": [
+      "Transcribed by Claude from the vendor chart image during a session; verify against the image before ordering."
+    ],
+    "rows": [
+      {
+        "code": "XXSC",
+        "label": null,
+        "ordinal": 0,
+        "girth": {
+          "min": 34,
+          "max": 37
+        },
+        "bust": {
+          "min": 20,
+          "max": 22
+        },
+        "waist": {
+          "min": 19,
+          "max": 22
+        },
+        "hips": {
+          "min": 20,
+          "max": 22
+        },
+        "inseam": {
+          "min": 17,
+          "max": 19
+        },
+        "height": null
+      },
+      {
+        "code": "XSC",
+        "label": null,
+        "ordinal": 1,
+        "girth": {
+          "min": 38,
+          "max": 41
+        },
+        "bust": {
+          "min": 21,
+          "max": 23
+        },
+        "waist": {
+          "min": 21,
+          "max": 23
+        },
+        "hips": {
+          "min": 22,
+          "max": 24
+        },
+        "inseam": {
+          "min": 19,
+          "max": 22
+        },
+        "height": null
+      },
+      {
+        "code": "SC",
+        "label": null,
+        "ordinal": 2,
+        "girth": {
+          "min": 42,
+          "max": 44
+        },
+        "bust": {
+          "min": 24,
+          "max": 26
+        },
+        "waist": {
+          "min": 23,
+          "max": 24
+        },
+        "hips": {
+          "min": 25,
+          "max": 27
+        },
+        "inseam": {
+          "min": 22,
+          "max": 25
+        },
+        "height": null
+      },
+      {
+        "code": "MC",
+        "label": null,
+        "ordinal": 3,
+        "girth": {
+          "min": 45,
+          "max": 49
+        },
+        "bust": {
+          "min": 27,
+          "max": 29
+        },
+        "waist": {
+          "min": 24,
+          "max": 26
+        },
+        "hips": {
+          "min": 28,
+          "max": 30
+        },
+        "inseam": {
+          "min": 25,
+          "max": 28
+        },
+        "height": null
+      },
+      {
+        "code": "LC",
+        "label": null,
+        "ordinal": 4,
+        "girth": {
+          "min": 50,
+          "max": 54
+        },
+        "bust": {
+          "min": 30,
+          "max": 32
+        },
+        "waist": {
+          "min": 26,
+          "max": 28
+        },
+        "hips": {
+          "min": 31,
+          "max": 34
+        },
+        "inseam": {
+          "min": 28,
+          "max": 30
+        },
+        "height": null
+      },
+      {
+        "code": "XLC",
+        "label": null,
+        "ordinal": 5,
+        "girth": {
+          "min": 54,
+          "max": 57
+        },
+        "bust": {
+          "min": 33,
+          "max": 35
+        },
+        "waist": {
+          "min": 29,
+          "max": 31
+        },
+        "hips": {
+          "min": 35,
+          "max": 37
+        },
+        "inseam": {
+          "min": 29,
+          "max": 31
+        },
+        "height": null
+      },
+      {
+        "code": "XXLC",
+        "label": null,
+        "ordinal": 6,
+        "girth": {
+          "min": 58,
+          "max": 60
+        },
+        "bust": {
+          "min": 36,
+          "max": 38
+        },
+        "waist": {
+          "min": 32,
+          "max": 34
+        },
+        "hips": {
+          "min": 38,
+          "max": 40
+        },
+        "inseam": {
+          "min": 32,
+          "max": 34
+        },
+        "height": null
+      }
+    ]
+  }
+}
