@@ -35,6 +35,8 @@ export interface UsedChartSummary {
   /** The costume style this chart sized. */
   styleNumber: string;
   costumeName: string;
+  /** Sizes this costume is made in, so "fits" suggestions stay orderable. */
+  availableSizes: string[];
   id: string;
   label: string;
   variant: string;
@@ -60,6 +62,7 @@ const summarise = (
 ): UsedChartSummary => ({
   styleNumber: costume.styleNumber,
   costumeName: costume.name,
+  availableSizes: costume.availableSizes,
   id: chart.id,
   label: labels.join(" + "),
   variant: chart.variant,
@@ -120,6 +123,10 @@ export async function POST(req: Request) {
             ? err.message
             : String(err);
       }
+      // With several pieces, the same unmeasured dancer is skipped once per piece.
+      result.skipped = result.skipped.filter(
+        (sk, i, all) => all.findIndex((x) => x.rowNumber === sk.rowNumber) === i,
+      );
       results.push(result);
     }
 

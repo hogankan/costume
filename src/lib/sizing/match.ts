@@ -11,6 +11,7 @@ import {
   type SizingResult,
 } from "./types";
 import { contains, distanceOutside, fmt, formatRange, hi, lo } from "./range";
+import { inseamFit } from "./inseam";
 
 export class SizingError extends Error {}
 
@@ -337,6 +338,12 @@ function addAdvisoryFlags(
       });
       continue;
     }
+    if (key === "inseam" && range && range.min !== null && range.min === range.max) {
+      const flag = inseamFlag(value, range.min, row.code);
+      if (flag) flags.push(flag);
+      continue;
+    }
+
     if (!range || contains(range, value)) continue;
 
     // A single printed value is the GARMENT's dimension, not a range the dancer
@@ -372,6 +379,40 @@ function addAdvisoryFlags(
       delta,
     });
   }
+}
+
+/** Flag an inseam against the single garment length a chart prints for a size. */
+function inseamFlag(value: number, garment: number, code: string): Flag | null {
+  const fit = inseamFit(value, garment);
+  const base = { code: "MEASUREMENT_OUT_OF_RANGE" as const, measure: "inseam" as const, value, range: { min: garment, max: garment } };
+  if (fit === "too-short") {
+    const delta = value - garment;
+    return {
+      ...base,
+      severity: "warning",
+      direction: "over",
+      delta,
+      message: `Inseam ${fmt(value)}" is ${fmt(delta)}" longer than the ${code} garment's ${fmt(garment)}" leg - the legs will be too short.`,
+    };
+  }
+  if (fit === "too-long") {
+    const delta = garment - value;
+    return {
+      ...base,
+      severity: "warning",
+      direction: "under",
+      delta,
+      message: `Inseam ${fmt(value)}" is ${fmt(delta)}" shorter than the ${code} garment's ${fmt(garment)}" leg - the legs will be too long.`,
+    };
+  }
+  if (fit === "exact") {
+    return {
+      ...base,
+      severity: "info",
+      message: `Inseam ${fmt(value)}" is right on the ${code} garment's ${fmt(garment)}" leg - no room to grow.`,
+    };
+  }
+  return null;
 }
 
 function buildRationale(

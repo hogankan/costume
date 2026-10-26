@@ -1,5 +1,5 @@
 import { formatRange } from "../sizing/range";
-import { MEASURE_LABELS, REPORT_MEASURES, type CellStatus, type FitReport } from "./fitReport";
+import { MEASURE_LABELS, REPORT_MEASURES, type CellTone, type FitReport } from "./fitReport";
 
 /**
  * The fit report as a standalone, printable page: one class per printed page,
@@ -7,16 +7,16 @@ import { MEASURE_LABELS, REPORT_MEASURES, type CellStatus, type FitReport } from
  * printing unless told otherwise) and nothing from the app's own controls.
  */
 
-const COLOURS: Record<CellStatus, string> = {
-  fits: "#e2f0d9",
-  "slightly-over": "#fff2cc",
-  "slightly-under": "#fff2cc",
-  over: "#f8cbad",
-  under: "#ddebf7",
-  garment: "transparent",
-  "not-on-chart": "transparent",
-  "not-measured": "#f2f2f2",
+const COLOURS: Record<CellTone, string> = {
+  green: "#e2f0d9",
+  yellow: "#ffe699",
+  red: "#f4b183",
+  blue: "#ddebf7",
+  grey: "#f2f2f2",
+  none: "transparent",
 };
+
+const SOURCE_LABEL = { added: "added in app", edited: "edited" } as const;
 
 const esc = (v: unknown): string =>
   String(v ?? "").replace(
@@ -30,31 +30,37 @@ function classSection(report: FitReport): string {
 
   const head = [
     "Dancer",
-    ...(multiStyle ? ["Costume"] : []),
+    ...(multiStyle ? ["Piece"] : []),
     "Size",
     ...REPORT_MEASURES.map((m) => (m === "girth" ? "Girth ★" : MEASURE_LABELS[m])),
     "What to check",
   ];
 
   const body = report.rows
-    .map((r) => {
+    .map((r, i) => {
+      const first = i === 0 || report.rows[i - 1].rowNumber !== r.rowNumber;
       const size = r.notSized
         ? `<em class="muted">not sized</em>`
         : `<b>${esc(r.size)}</b>${r.recommendedSize !== r.size ? `<div class="small">was ${esc(r.recommendedSize)}</div>` : ""}`;
       const cells = r.cells
         .map((c) => {
-          const bg = r.notSized ? "transparent" : COLOURS[c.status];
-          const range = c.range && !r.notSized ? `<div class="small">${esc(formatRange(c.range))}</div>` : "";
-          const strong = c.measure === "girth" || c.status === "over" || c.status === "under";
-          return `<td class="m" style="background:${bg}">${strong ? `<b>${esc(c.text)}</b>` : esc(c.text)}${range}</td>`;
+          const bg = r.notSized ? "transparent" : COLOURS[c.tone];
+          const range =
+            c.range && !r.notSized ? `<div class="small">${esc(r.size)}: ${esc(formatRange(c.range))}</div>` : "";
+          const fits = c.fitsSize && !r.notSized ? `<div class="fits">fits ${esc(c.fitsSize)}</div>` : "";
+          const strong = c.measure === "girth" || c.tone === "red" || c.tone === "blue";
+          return `<td class="m" style="background:${bg}">${strong ? `<b>${esc(c.text)}</b>` : esc(c.text)}${range}${fits}</td>`;
         })
         .join("");
       const alerts =
         r.alerts.length === 0
           ? `<span class="ok">All lined up</span>`
           : `<ul>${r.alerts.map((a) => `<li>${esc(a)}</li>`).join("")}</ul>`;
-      return `<tr${r.notSized ? ' class="notsized"' : ""}><td><b>${esc(r.name)}</b></td>${
-        multiStyle ? `<td>${esc(r.styleNumber ?? "")}</td>` : ""
+      const name = first
+        ? `<b>${esc(r.name)}</b>${r.source ? ` <span class="tag">${SOURCE_LABEL[r.source]}</span>` : ""}`
+        : "";
+      return `<tr class="${[r.notSized ? "notsized" : "", first ? "first" : ""].join(" ").trim()}"><td>${name}</td>${
+        multiStyle ? `<td>${esc(r.styleNumber ?? "")}<div class="small">${esc(r.costumeName ?? "")}</div></td>` : ""
       }<td>${size}</td>${cells}<td class="alerts">${alerts}</td></tr>`;
     })
     .join("");
@@ -86,7 +92,7 @@ function classSection(report: FitReport): string {
     }${report.charts
       .map((c) => `${esc(c.styleNumber)}${c.costumeName ? ` ${esc(c.costumeName)}` : ""}`)
       .join(" / ")}</p>
-    <p class="meta"><b>${s.sized} sized</b> · ${s.clean} all lined up · <b>${s.withAlerts} to check</b>${
+    <p class="meta"><b>${s.sized} dancers sized</b> · ${s.clean} all lined up · <b>${s.withAlerts} to check</b>${
       s.notSized ? ` · ${s.notSized} not sized` : ""
     }</p>
     <table class="report"><thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table>
@@ -97,14 +103,14 @@ function classSection(report: FitReport): string {
 
 function legend(): string {
   const items: [string, string][] = [
-    [COLOURS.fits, "✓ inside the chart range"],
-    [COLOURS["slightly-over"], "▲▼ off by 2\" or less — alterable"],
-    [COLOURS.over, "▲ over by more — needs attention"],
-    [COLOURS.under, "▼ under by more — roomy / long"],
+    [COLOURS.green, "✓ fits the size ordered"],
+    [COLOURS.yellow, "off by 2\" or less (alterable) · inseam right on (no room to grow)"],
+    [COLOURS.red, "needs attention · inseam over the leg, or 4\"+ under"],
+    [COLOURS.blue, "▼ under by more — roomy"],
   ];
   return `<p class="legend">${items
     .map(([bg, t]) => `<span><i style="background:${bg}"></i>${esc(t)}</span>`)
-    .join("")}<span>Girth decides the size. Single numbers (like inseam) are how the garment is cut.</span></p>`;
+    .join("")}<span>"fits" = the size that measurement alone would pick. Girth decides the size.</span></p>`;
 }
 
 export function fitReportHtml(reports: FitReport[], title: string): string {
@@ -124,6 +130,9 @@ export function fitReportHtml(reports: FitReport[], title: string): string {
   td.m, th.m { text-align: center; white-space: nowrap; }
   .report th:nth-child(n+3):not(:last-child) { text-align: center; }
   .small { font-size: 9px; color: #555; }
+  .fits { font-size: 9px; font-weight: 600; }
+  .tag { font-size: 9px; background: #ede7f6; color: #4527a0; padding: 0 3px; border-radius: 2px; }
+  tr.first td { border-top: 2px solid #999; }
   .muted { color: #777; }
   .ok { color: #2e7d32; }
   td.alerts { color: #9c2a00; min-width: 240px; }

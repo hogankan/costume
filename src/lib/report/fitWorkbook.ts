@@ -3,7 +3,7 @@ import { formatRange } from "../sizing/range";
 import {
   MEASURE_LABELS,
   REPORT_MEASURES,
-  type CellStatus,
+  type CellTone,
   type FitReport,
 } from "./fitReport";
 
@@ -13,16 +13,16 @@ import {
  * with the chart rows themselves underneath for checking.
  */
 
-const FILL: Record<CellStatus, string | null> = {
-  fits: "FFE2F0D9", // green
-  "slightly-over": "FFFFF2CC", // pale amber
-  "slightly-under": "FFFFF2CC",
-  over: "FFF8CBAD", // red-orange
-  under: "FFDDEBF7", // blue
-  garment: null,
-  "not-on-chart": null,
-  "not-measured": "FFF2F2F2",
+const FILL: Record<CellTone, string | null> = {
+  green: "FFE2F0D9",
+  yellow: "FFFFE699",
+  red: "FFF4B183",
+  blue: "FFDDEBF7",
+  grey: "FFF2F2F2",
+  none: null,
 };
+
+const SOURCE_LABEL = { added: "added in app", edited: "edited" } as const;
 
 const HEADER_FILL = "FF1F3864";
 const NOT_SIZED_FILL = "FFFCE4D6";
@@ -68,7 +68,7 @@ function addSummary(wb: ExcelJS.Workbook, reports: FitReport[]) {
       r.summary.notSized,
     ]);
     row.eachCell((c) => (c.border = thin));
-    if (r.summary.withAlerts > 0) row.getCell(6).fill = solid(FILL["slightly-over"]!);
+    if (r.summary.withAlerts > 0) row.getCell(6).fill = solid(FILL.yellow!);
     if (r.summary.notSized > 0) row.getCell(7).fill = solid(NOT_SIZED_FILL);
   }
   ws.columns = [{ width: 48 }, { width: 26 }, { width: 40 }, { width: 8 }, { width: 13 }, { width: 10 }, { width: 10 }];
@@ -77,12 +77,12 @@ function addSummary(wb: ExcelJS.Workbook, reports: FitReport[]) {
 
 function addLegend(ws: ExcelJS.Worksheet, at: number) {
   const items: [string, string | null][] = [
-    ["✓ inside the chart range for the size ordered", FILL.fits],
-    ["▲/▼ outside by 2\" or less — a seam's worth, alterable", FILL["slightly-over"]],
-    ["▲ over by more than 2\" (or girth over) — needs attention", FILL.over],
-    ["▼ under by more than 2\" — costume will be roomy / long", FILL.under],
-    ["— not measured", FILL["not-measured"]],
-    ["Girth decides the size. Other measurements never change it.", null],
+    ["✓ fits the size ordered", FILL.green],
+    ["Off by 2\" or less (alterable) · inseam right on the leg length (no room to grow)", FILL.yellow],
+    ["Needs attention · inseam longer than the leg, or the leg 4\"+ longer than the dancer", FILL.red],
+    ["▼ under by more than 2\" — costume will be roomy", FILL.blue],
+    ["— not measured", FILL.grey],
+    ["\"fits\" = the size that measurement alone would pick. Girth decides the size.", null],
   ];
   ws.getCell(at, 1).value = "Key";
   ws.getCell(at, 1).font = { bold: true };
@@ -105,7 +105,7 @@ function addClassSheet(wb: ExcelJS.Workbook, report: FitReport, name: string) {
   }
   ws.addRow([
     "Result",
-    `${report.summary.sized} sized · ${report.summary.clean} all lined up · ${report.summary.withAlerts} to check · ${report.summary.notSized} not sized`,
+    `${report.summary.sized} dancers sized · ${report.summary.clean} all lined up · ${report.summary.withAlerts} to check · ${report.summary.notSized} not sized`,
   ]);
   ws.addRow([]);
 
@@ -113,7 +113,7 @@ function addClassSheet(wb: ExcelJS.Workbook, report: FitReport, name: string) {
   const head = [
     "Sheet row",
     "Dancer",
-    ...(multiStyle ? ["Costume"] : []),
+    ...(multiStyle ? ["Piece"] : []),
     "Size",
     ...REPORT_MEASURES.map((m) => (m === "girth" ? "Girth ★" : MEASURE_LABELS[m])),
     "What to check",
@@ -121,13 +121,22 @@ function addClassSheet(wb: ExcelJS.Workbook, report: FitReport, name: string) {
   headerRow(ws.addRow(head));
   const firstMeasureCol = multiStyle ? 5 : 4;
 
-  for (const r of report.rows) {
+  report.rows.forEach((r, idx) => {
+    const first = idx === 0 || report.rows[idx - 1].rowNumber !== r.rowNumber;
+    const cellText = (c: (typeof r.cells)[number]) =>
+      [
+        c.text,
+        c.range && !r.notSized ? `${r.size}: ${formatRange(c.range)}` : "",
+        c.fitsSize && !r.notSized ? `fits ${c.fitsSize}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
     const row = ws.addRow([
-      r.rowNumber,
-      r.name,
-      ...(multiStyle ? [r.styleNumber ?? ""] : []),
+      first ? (r.source === "added" ? "added" : r.rowNumber) : "",
+      first ? `${r.name}${r.source ? ` (${SOURCE_LABEL[r.source]})` : ""}` : "",
+      ...(multiStyle ? [r.styleNumber ? `${r.styleNumber} ${r.costumeName ?? ""}`.trim() : ""] : []),
       r.notSized ? "not sized" : r.recommendedSize !== r.size ? `${r.size} (was ${r.recommendedSize})` : r.size,
-      ...r.cells.map((c) => (c.range ? `${c.text}   (${formatRange(c.range)})` : c.text)),
+      ...r.cells.map(cellText),
       r.alerts.join("\n"),
     ]);
     row.eachCell({ includeEmpty: true }, (cell) => {
@@ -137,10 +146,10 @@ function addClassSheet(wb: ExcelJS.Workbook, report: FitReport, name: string) {
     row.getCell(firstMeasureCol - 1).font = { bold: true };
     if (r.notSized) {
       row.eachCell({ includeEmpty: true }, (cell) => (cell.fill = solid(NOT_SIZED_FILL)));
-      continue;
+      return;
     }
     r.cells.forEach((c, i) => {
-      const fill = FILL[c.status];
+      const fill = FILL[c.tone];
       const cell = row.getCell(firstMeasureCol + i);
       if (fill) cell.fill = solid(fill);
       cell.note = c.note;
@@ -148,12 +157,12 @@ function addClassSheet(wb: ExcelJS.Workbook, report: FitReport, name: string) {
       if (c.measure === "girth") cell.font = { bold: true };
     });
     if (r.alerts.length > 0) row.getCell(head.length).font = { color: { argb: "FF9C2A00" } };
-  }
+  });
 
   ws.columns = [
     { width: 9 },
     { width: 22 },
-    ...(multiStyle ? [{ width: 10 }] : []),
+    ...(multiStyle ? [{ width: 18 }] : []),
     { width: 12 },
     ...REPORT_MEASURES.map(() => ({ width: 16 })),
     { width: 70 },

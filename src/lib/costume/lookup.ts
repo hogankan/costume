@@ -2,7 +2,6 @@ import { revolutionAdapter } from "../vendors/revolution";
 import { awishcometrueAdapter } from "../vendors/awishcometrue";
 import { weissmanAdapter, weissmanProductUrl } from "../vendors/weissman";
 import { laylasAdapter } from "../vendors/laylas";
-import { buildManualCostume } from "../vendors/manual";
 import { VendorScrapeError, type ScrapedCostume, type VendorAdapter } from "../vendors/types";
 import { listCatalogs, listSeasons } from "../catalog/store";
 import { loadLibrary, toCandidate } from "../charts/library";
@@ -41,7 +40,7 @@ const STYLE_URL_BUILDERS: Record<string, (style: string) => string> = {
   weissman: weissmanProductUrl,
 };
 
-export type CostumeSource = "catalog" | "scraped" | "manual";
+export type CostumeSource = "catalog" | "scraped";
 
 export interface LookupResult {
   costume: ScrapedCostume;
@@ -161,12 +160,6 @@ export async function lookupCostume(opts: {
   return { costume, resolution: resolveFor(costume, companySlug), companySlug, source };
 }
 
-/** A costume typed in by hand because the vendor would not give up its sizes. */
-export function manualCostume(body: Parameters<typeof buildManualCostume>[0], companySlug: string): LookupResult {
-  const costume = buildManualCostume(body);
-  return { costume, resolution: resolveFor(costume, companySlug), companySlug, source: "manual" };
-}
-
 /**
  * The chart image the product page links to settles which chart applies; size
  * codes are only a fallback, because some vendors' charts share a vocabulary
@@ -184,7 +177,7 @@ function resolveFor(costume: ScrapedCostume, companySlug: string): ChartResoluti
   );
 }
 
-/** Whether a thrown error is worth offering the manual-entry form for. */
+/** Whether a failed lookup is worth retrying with a pasted product URL. */
 export function suggestsManual(err: unknown): boolean {
   if (err instanceof CostumeLookupError) return err.suggestManual;
   const message = err instanceof Error ? err.message : String(err);

@@ -71,9 +71,10 @@ There are three ways to get the numbers in, and **the API is the least important
 of them**: all 406 Revolution costumes share just two charts, and Weissman has
 six, so the whole system needs roughly eight charts ever.
 
-1. **Type it in** — the app shows the vendor's chart image beside a table
-   pre-filled with the size codes that costume offers. No API key, no dependency,
-   and accurate because a person read it.
+1. **Type it in** — transcribe the vendor's chart into
+   `charts/{company}/{variant}.json` by hand and run `npm run charts:validate`.
+   No API key, and accurate because a person read it. (Charts are deliberately
+   not editable from the website, so nobody can change everyone's sizes there.)
 2. **Read it automatically** — `npm run charts:seed` with `ANTHROPIC_API_KEY` set.
    Produces a draft that must still be confirmed against the image.
 3. Both write to `charts/{company}/{variant}.json`, committed, so the numbers
@@ -97,9 +98,11 @@ Two things real charts taught the code:
   by printed position, and the validator only treats *most* steps going backwards
   as a real error.
 - **A single printed value is the garment's dimension, not a fit range.** Charts
-  print inseam as one number per size. Treating it as a range flagged every dancer
-  whose leg differed from it, which made an entire class look like it needed
-  review.
+  print inseam as one number per size: how long the leg is cut. The studio's rule
+  (`src/lib/sizing/inseam.ts`): leg longer than the garment → alert (too short);
+  exactly equal → caution (no room to grow); garment up to 4" longer → good;
+  garment 4"+ longer → alert (too long). Other single printed values are noted,
+  never alerted.
 
 `ICL` / `MCL` / `SAL` are **separate long sizes with their own girth**, not fit
 notes on `IC` / `MC` / `SA`.
@@ -111,31 +114,29 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000, drop in `sample-data/junior-jazz-roster.xlsx`, then
-enter a costume by **style number or product URL** - e.g. `27776`. A style number
-is answered from the crawled catalogue without contacting the vendor; a URL that
-has not been crawled is fetched directly.
+Open http://localhost:3000 and drop in `sample-data/holiday-costume-workbook.xlsx`
+(or the `.pdf` of it). A workbook with one tab per class, each with a `COSTUME`
+line above its table, is sized in one go:
 
-### A whole costume workbook at once
+- the costume is read from each tab and looked up by style number;
+- `A Wish 10096Y // 16179G + 13182 (boy)` gives the class a girls' costume and a
+  boys' costume with two pieces (top and pants), each sized on its own chart; who
+  wears the boys' costume is ticked by hand, never guessed from names;
+- any class can have pieces or a boys' costume added on screen, and a style typed
+  in; a costume whose sizes span two charts (child and adult) uses both;
+- tabs marked `NOT SELECTED YET`, or with no measurements, are listed and skipped;
+- a missing measurement or a new dancer can be typed in without re-uploading
+  (kept until the page is closed, not saved);
+- downloads: the order sheet, and the fit report for all classes; each class can
+  also be printed or downloaded on its own.
 
-Drop in `sample-data/holiday-costume-workbook.xlsx` (or the `.pdf` of it). A
-workbook with one tab per class, each with a `COSTUME` line above its table
-(e.g. `A Wish 10096Y // 16179G (boy)`), is sized in one go:
-
-- the costume is read from each tab and looked up automatically;
-- a second style marked `(boy)` adds a checkbox list to choose who wears it;
-- tabs marked `NOT SELECTED YET`, or with no measurements, are shown and skipped;
-- two downloads: the order sheet, and the studio's own workbook with the Size
-  column filled in (formatting kept).
+A single class roster works too - it opens as one class card.
 
 PDFs are read from their text, so a PDF saved from Excel or Sheets works; a
 scanned or photographed sheet is refused with a message rather than guessed at.
 Regenerate the sample with `npx tsx scripts/make-sample-workbook.ts`.
 
-Sizing needs at least one confirmed chart, so run `npm run charts:seed` first.
-Until then the app will tell you no charts have been read rather than guessing.
-
-The database is not needed for this flow; nothing is persisted yet.
+Nothing is saved on the server; the database is not used yet.
 
 ## Setup
 
@@ -157,7 +158,8 @@ npm run db:migrate        # needs a reachable Postgres
 | `npm run charts:seed` | Extract chart images into `charts/` as drafts |
 | `npm run charts:extract -- <url>` | Read one chart image and print it for eye-checking |
 | `node scripts/show-workbook.mjs` | Print a built order workbook to the terminal |
-| `npx tsx scripts/make-sample-roster.ts` | Regenerate the sample class roster |
+| `npx tsx scripts/make-sample-roster.ts` | Regenerate the sample class rosters |
+| `npx tsx scripts/make-sample-workbook.ts` | Regenerate the sample workbook and its PDF |
 
 ## Layout
 
@@ -165,7 +167,9 @@ npm run db:migrate        # needs a reachable Postgres
 src/lib/sizing/     matcher (pure, no I/O), run orchestration
 src/lib/charts/     extraction, validation, chart-to-costume resolution, manifest
 src/lib/vendors/    per-company scrapers + the manual fallback
-src/lib/import/     spreadsheet parsing, header mapping, unit detection
+src/lib/import/     spreadsheet + PDF parsing, class tabs, header mapping, units
+src/lib/costume/    costume lookup by style number or URL
+src/lib/report/     the fit report (screen, print, Excel)
 src/lib/export/     the order workbook
 prisma/schema.prisma
 charts/             confirmed chart library (committed)
@@ -258,33 +262,27 @@ from invented test data.
 - **Vendors ship lettered and very short style numbers.** 272 of Revolution's 406
   products use an `RC` prefix, and three are two or three digits.
 
-## The results screen
+## The fit report
 
-Three views stacked, so a recommendation can be checked rather than taken on trust:
-
-1. **Size chart used** — the whole chart as a table, with the rows this class
-   actually needs highlighted and a count on each, and sizes the costume does not
-   offer struck through. Where a chart came from an image, the original can be
-   shown alongside for eye-checking. Vendor notes print underneath.
-2. **Class measurements** — the roster as a grid, with every measurement that fell
-   outside the assigned size highlighted in place: ▲ above the range, ▼ below,
-   each with how far out it is. Girth is marked as the deciding measurement and
-   shows the range it landed in.
-3. **Results** — per-dancer size, rationale, flags, and the override control.
+Each sized class has a fit report: one row per dancer per costume piece, every
+measurement in a box showing the dancer's number, the chart range for the size
+being ordered, and the size that measurement alone would fit. Green fits; yellow
+is a small, alterable miss (or an inseam right on the leg length); red needs
+attention; blue is roomy. "What to check" lists what did not line up. The same
+report prints (one page per class, colours kept) and downloads as Excel, with the
+chart the class was sized against underneath.
 
 ## Current state
 
-Working end to end in the browser: upload a roster, correct the column mapping,
-look up or hand-enter a costume, size the class, override individual dancers with
-a recorded reason, and download the order workbook.
+Working end to end in the browser and deployed on Railway: upload a workbook,
+CSV or PDF; every class with a costume is sized; pieces, boys' costumes and
+missing dancers can be added on screen; individual sizes can be overridden with
+a recorded reason; download the order sheet and fit reports.
 
 **Not yet built:** persistence (nothing is saved between sessions — the Prisma
-schema exists but no migration has been run), auth and studio scoping, multiple
-classes in one order sheet, the Weissman / A Wish Come True / Layla's scrapers,
-and the declarative per-vendor rules overlay (e.g. Revolution's note that XLC and
-XXLC fit a larger child rather than a petite adult).
+schema exists but no migration has been run), login, and the declarative
+per-vendor rules overlay (e.g. Revolution's note that XLC and XXLC fit a larger
+child rather than a petite adult).
 
 **Not yet verified live:** chart extraction has never been run against the API —
-it needs `ANTHROPIC_API_KEY`. Image fetching, hashing and downscaling are verified
-against all seven real chart images. The database migration has not been run;
-it needs a reachable Postgres.
+it needs `ANTHROPIC_API_KEY`.

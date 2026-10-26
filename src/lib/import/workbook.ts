@@ -55,12 +55,6 @@ export function readCostumeWorkbook(sheets: ParsedSheet[]): ClassSheet[] {
   return classes;
 }
 
-/** Workbook mode applies when a file has several classes or names its costume. */
-export function isCostumeWorkbook(classes: ClassSheet[]): boolean {
-  const real = classes.filter((c) => c.kind === "class");
-  return real.length >= 2 || real.some((c) => c.meta.costumeText !== undefined);
-}
-
 function readClassSheet(sheet: ParsedSheet, sheetIndex: number): ClassSheet {
   const headerRow = detectHeaderRow(sheet.rows);
   const headers = (sheet.rows[headerRow] ?? []).map((c) => String(c ?? ""));

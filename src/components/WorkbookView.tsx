@@ -2,22 +2,31 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { ClassSheet } from "@/lib/import/workbook";
+import type { ImportedDancer } from "@/lib/import/parse";
 import type { LookupResult } from "@/lib/costume/lookup";
 import type { ExportAssignment } from "@/lib/export/orderSheet";
 import type { Flag } from "@/lib/sizing/types";
 import type { CostumeLookupOutcome } from "@/app/api/workbook/costumes/route";
 import type { ClassSizeResult } from "@/app/api/workbook/size/route";
-import type { FillTarget } from "@/lib/export/fillWorkbook";
+import { buildFitReport, reportOverrideKey, type FitReport } from "@/lib/report/fitReport";
+import { fitReportHtml } from "@/lib/report/fitHtml";
+import {
+  ADDED_ROW_BASE,
+  buildManualDancer,
+  formFromDancer,
+  type DancerForm,
+} from "@/lib/import/manualDancer";
 import { Alert, Button, Card, SeverityBadge, inputClass } from "./ui";
 import { COMPANIES, type ChartInfo, type RosterResponse } from "./types";
-import { buildFitReport, type FitReport } from "@/lib/report/fitReport";
 import { FitReportTable } from "./FitReportTable";
-import { fitReportHtml } from "@/lib/report/fitHtml";
+import { DancerFormPanel } from "./DancerForm";
 
 /**
- * Size a whole costume workbook at once: one card per class, with the costume
- * read from the class's own tab. Classes that are not ready (no costume chosen,
- * no measurements) are shown and skipped rather than blocking the rest.
+ * Size a whole costume workbook: one card per class, with the costume read from
+ * the class's own tab. A class can dress two groups of dancers differently (the
+ * boys, usually) and each group's costume can have several pieces - a top and
+ * pants - each sized against its own chart. Classes that are not ready are
+ * shown and skipped rather than blocking the rest.
  */
 
 const COMPANY_NAMES: Record<string, string> = Object.fromEntries(
@@ -35,20 +44,40 @@ interface CostumeSlot {
   colorway: string;
 }
 
+interface Piece extends CostumeSlot {
+  id: string;
+}
+
+interface Group {
+  /** "main" dresses everyone not ticked for "alt". */
+  id: "main" | "alt";
+  /** For the alternate group: "Boys", or whatever the sheet called it. */
+  label: string;
+  pieces: Piece[];
+}
+
 interface ClassState {
   key: string;
   cls: ClassSheet;
-  primary: CostumeSlot;
-  /** Second costume for some dancers, usually the boys' version. */
-  alternate: (CostumeSlot & { label: string }) | null;
-  /** Row numbers ticked to wear the alternate costume. */
+  groups: Group[];
+  /** Row numbers ticked to wear the alternate group's costume. Never guessed. */
   alternateRows: number[];
 }
 
 type Overrides = Record<string, { size: string; reason: string }>;
 
-const overrideKey = (classKey: string, a: Pick<ExportAssignment, "rowNumber" | "dancerName">) =>
-  `${classKey}|${a.rowNumber ?? a.dancerName}`;
+let nextPieceId = 0;
+const newPiece = (companySlug: string, input = ""): Piece => ({
+  id: `p${++nextPieceId}`,
+  companySlug,
+  input,
+  status: "idle",
+  chartIds: [],
+  colorway: "",
+});
+
+const overrideKey = (classKey: string, rowNumber: number | undefined, styleNumber: string) =>
+  `${classKey}|${rowNumber ?? "?"}|${styleNumber}`;
 
 const severityOf = (flags: Flag[]): "blocking" | "warning" | "ok" =>
   flags.some((f) => f.severity === "blocking")
@@ -57,8 +86,16 @@ const severityOf = (flags: Flag[]): "blocking" | "warning" | "ok" =>
       ? "warning"
       : "ok";
 
-function emptySlot(companySlug: string, input = ""): CostumeSlot {
-  return { companySlug, input, status: "idle", chartIds: [], colorway: "" };
+const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+function altLabel(label: string): string {
+  if (/\b(boys?|guys?|male|men)\b/i.test(label)) return "Boys";
+  return label === "alternate" ? "Second group" : capitalise(label);
+}
+
+function groupTitle(c: ClassState, g: Group): string {
+  if (g.id === "alt") return `${g.label}' costume`;
+  return c.groups.some((x) => x.id === "alt") ? "Girls' costume" : "Costume";
 }
 
 function initialState(classes: ClassSheet[]): ClassState[] {
@@ -67,25 +104,40 @@ function initialState(classes: ClassSheet[]): ClassState[] {
     .map((cls) => {
       const parsed = cls.costume;
       const selected = parsed.status === "selected";
-      return {
-        key: cls.sheetName,
-        cls,
-        primary: selected
-          ? emptySlot(parsed.companySlug, parsed.primary)
-          : emptySlot("awishcometrue"),
-        alternate:
-          selected && parsed.alternate
-            ? {
-                ...emptySlot(parsed.companySlug, parsed.alternate.style),
-                label: parsed.alternate.label,
-              }
-            : null,
-        alternateRows: cls.suggestedAlternate,
-      };
+      const company = selected ? parsed.companySlug : "awishcometrue";
+      const groups: Group[] = [
+        {
+          id: "main",
+          label: "",
+          pieces: selected ? parsed.pieces.map((p) => newPiece(company, p)) : [newPiece(company)],
+        },
+      ];
+      if (selected && parsed.alternate) {
+        groups.push({
+          id: "alt",
+          label: altLabel(parsed.alternate.label),
+          pieces: parsed.alternate.pieces.map((p) => newPiece(company, p)),
+        });
+      }
+      return { key: cls.sheetName, cls, groups, alternateRows: cls.suggestedAlternate };
     });
 }
 
-function applyOutcome(slot: CostumeSlot, outcome: CostumeLookupOutcome | undefined): CostumeSlot {
+const filled = (pieces: Piece[]) => pieces.filter((p) => p.input.trim());
+const mainGroup = (c: ClassState) => c.groups.find((g) => g.id === "main")!;
+const altGroup = (c: ClassState) => c.groups.find((g) => g.id === "alt");
+const allPieces = (c: ClassState) => c.groups.flatMap((g) => g.pieces);
+
+/** Pieces that will actually be sized: the alternate only matters once someone is ticked. */
+function activePieces(c: ClassState): Piece[] {
+  const alt = altGroup(c);
+  return [
+    ...filled(mainGroup(c).pieces),
+    ...(alt && c.alternateRows.length > 0 ? filled(alt.pieces) : []),
+  ];
+}
+
+function applyOutcome(slot: Piece, outcome: CostumeLookupOutcome | undefined): Piece {
   if (!outcome) return { ...slot, status: "error", error: "No answer for this costume." };
   if (!outcome.ok) return { ...slot, status: "error", error: outcome.error, lookup: undefined };
   return {
@@ -119,21 +171,21 @@ async function lookupMany(
 
 const slotKey = (s: CostumeSlot) => `${s.companySlug}:${s.input.trim()}`;
 
-function slotReady(slot: CostumeSlot | null): boolean {
-  return Boolean(slot && slot.status === "ok" && slot.chartIds.length > 0);
-}
-
 function classStatus(c: ClassState): { label: string; tone: "ok" | "warn" | "muted" } {
   const sizeable = c.cls.dancers.filter((d) => d.girth != null).length;
   if (sizeable === 0) return { label: "No measurements", tone: "muted" };
-  if (!c.primary.input.trim()) return { label: "Costume not selected yet", tone: "muted" };
-  if (c.primary.status === "loading" || c.alternate?.status === "loading")
+  if (filled(mainGroup(c).pieces).length === 0)
+    return { label: "Costume not selected yet", tone: "muted" };
+  const alt = altGroup(c);
+  if (alt && c.alternateRows.length > 0 && filled(alt.pieces).length === 0)
+    return { label: `Enter the ${alt.label.toLowerCase()}' costume`, tone: "warn" };
+  const active = activePieces(c);
+  if (active.some((p) => p.status === "loading"))
     return { label: "Looking up costume…", tone: "muted" };
-  if (c.primary.status === "error") return { label: "Costume not found", tone: "warn" };
-  if (c.primary.status !== "ok") return { label: "Look up the costume", tone: "warn" };
-  if (c.primary.chartIds.length === 0) return { label: "Pick a size chart", tone: "warn" };
-  if (c.alternate && c.alternateRows.length > 0 && !slotReady(c.alternate))
-    return { label: `Fix the ${c.alternate.label} costume`, tone: "warn" };
+  if (active.some((p) => p.status === "error")) return { label: "Costume not found", tone: "warn" };
+  if (active.some((p) => p.status !== "ok")) return { label: "Look up the costume", tone: "warn" };
+  if (active.some((p) => p.chartIds.length === 0))
+    return { label: "Pick a size chart", tone: "warn" };
   return { label: "Ready", tone: "ok" };
 }
 
@@ -142,21 +194,24 @@ function classStatus(c: ClassState): { label: string; tone: "ok" | "warn" | "mut
  * shown sizes no longer match what is on screen.
  */
 function signature(c: ClassState): string {
-  const slot = (s: CostumeSlot | null) =>
-    s ? [s.companySlug, s.lookup?.costume.styleNumber, [...s.chartIds].sort(), s.colorway] : null;
   return JSON.stringify([
-    slot(c.primary),
-    c.alternate ? slot(c.alternate) : null,
-    c.alternate ? [...c.alternateRows].sort((a, b) => a - b) : [],
+    activePieces(c).map((p) => [
+      p.companySlug,
+      p.lookup?.costume.styleNumber,
+      [...p.chartIds].sort(),
+      p.colorway,
+    ]),
+    [...c.alternateRows].sort((a, b) => a - b),
+    c.cls.dancers.map((d) => [d.rowNumber, d.name, d.girth, d.bust, d.waist, d.hips, d.inseam, d.height]),
   ]);
 }
 
 /** The fit report for one sized class, with the studio's overrides applied. */
 function reportFor(c: ClassState, result: ClassSizeResult, overrides: Overrides): FitReport {
-  const byRow: Record<number, { size: string; reason: string }> = {};
+  const byPiece: Record<string, { size: string; reason: string }> = {};
   for (const a of result.assignments) {
-    const o = overrides[overrideKey(c.key, a)];
-    if (o?.size && a.rowNumber != null) byRow[a.rowNumber] = o;
+    const o = overrides[overrideKey(c.key, a.rowNumber, a.styleNumber)];
+    if (o?.size && a.rowNumber != null) byPiece[reportOverrideKey(a.rowNumber, a.styleNumber)] = o;
   }
   return buildFitReport({
     className: c.cls.className,
@@ -166,22 +221,18 @@ function reportFor(c: ClassState, result: ClassSizeResult, overrides: Overrides)
     assignments: result.assignments,
     skipped: result.skipped,
     charts: result.charts,
-    overrides: byRow,
+    overrides: byPiece,
   });
 }
 
 export function WorkbookView({
   roster,
-  file,
   charts,
   onStartOver,
-  onSingleClass,
 }: {
   roster: RosterResponse;
-  file: File | null;
   charts: ChartInfo[];
   onStartOver: () => void;
-  onSingleClass: () => void;
 }) {
   const [classes, setClasses] = useState<ClassState[]>(() => initialState(roster.classes));
   const [results, setResults] = useState<Record<string, ClassSizeResult>>({});
@@ -198,21 +249,36 @@ export function WorkbookView({
   const update = (key: string, fn: (c: ClassState) => ClassState) =>
     setClasses((prev) => prev.map((c) => (c.key === key ? fn(c) : c)));
 
-  // Look up every costume named on the sheet once, as soon as the file is read.
-  useEffect(() => {
-    const slots = classes.flatMap((c) => [c.primary, c.alternate].filter(Boolean) as CostumeSlot[]);
-    const items = slots
-      .filter((s) => s.input.trim() && s.status === "idle")
-      .map((s) => ({ companySlug: s.companySlug, style: s.input.trim() }));
-    if (items.length === 0) return;
+  const updatePiece = (key: string, pieceId: string, fn: (p: Piece) => Piece) =>
+    update(key, (c) => ({
+      ...c,
+      groups: c.groups.map((g) => ({
+        ...g,
+        pieces: g.pieces.map((p) => (p.id === pieceId ? fn(p) : p)),
+      })),
+    }));
 
-    const markLoading = (s: CostumeSlot) =>
-      s.input.trim() && s.status === "idle" ? { ...s, status: "loading" as const } : s;
+  const queue = (key: string) =>
+    setPending((prev) => (prev.includes(key) ? prev : [...prev, key]));
+
+  // Look up every costume named on the sheet once, as soon as the file is read,
+  // then size whatever is ready.
+  useEffect(() => {
+    const items = classes
+      .flatMap(allPieces)
+      .filter((p) => p.input.trim() && p.status === "idle")
+      .map((p) => ({ companySlug: p.companySlug, style: p.input.trim() }));
+    if (items.length === 0) {
+      setPending(classes.map((c) => c.key));
+      return;
+    }
+
+    const markLoading = (p: Piece): Piece =>
+      p.input.trim() && p.status === "idle" ? { ...p, status: "loading" } : p;
     setClasses((prev) =>
       prev.map((c) => ({
         ...c,
-        primary: markLoading(c.primary),
-        alternate: c.alternate ? { ...c.alternate, ...markLoading(c.alternate) } : null,
+        groups: c.groups.map((g) => ({ ...g, pieces: g.pieces.map(markLoading) })),
       })),
     );
 
@@ -221,49 +287,41 @@ export function WorkbookView({
         setClasses((prev) =>
           prev.map((c) => ({
             ...c,
-            primary:
-              c.primary.status === "loading"
-                ? applyOutcome(c.primary, found[slotKey(c.primary)])
-                : c.primary,
-            alternate:
-              c.alternate && c.alternate.status === "loading"
-                ? { ...c.alternate, ...applyOutcome(c.alternate, found[slotKey(c.alternate)]) }
-                : c.alternate,
+            groups: c.groups.map((g) => ({
+              ...g,
+              pieces: g.pieces.map((p) =>
+                p.status === "loading" ? applyOutcome(p, found[slotKey(p)]) : p,
+              ),
+            })),
           })),
         ),
       )
       .then(() => setPending(classes.map((c) => c.key)))
       .catch((err) => setError(err instanceof Error ? err.message : String(err)));
-    // Runs once per upload; later lookups are triggered per class.
+    // Runs once per upload; later lookups are triggered per piece.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function relookup(key: string, which: "primary" | "alternate") {
-    const c = classes.find((x) => x.key === key);
-    const slot = c?.[which];
-    if (!c || !slot || !slot.input.trim()) return;
-    update(key, (x) => ({ ...x, [which]: { ...x[which]!, status: "loading" } }));
+  async function relookup(key: string, pieceId: string) {
+    const piece = classes
+      .find((x) => x.key === key)
+      ?.groups.flatMap((g) => g.pieces)
+      .find((p) => p.id === pieceId);
+    if (!piece || !piece.input.trim()) return;
+    updatePiece(key, pieceId, (p) => ({ ...p, status: "loading" }));
     try {
-      const found = await lookupMany([{ companySlug: slot.companySlug, style: slot.input.trim() }]);
-      update(key, (x) => ({
-        ...x,
-        [which]: { ...x[which]!, ...applyOutcome(x[which]!, found[slotKey(slot)]) },
-      }));
+      const found = await lookupMany([{ companySlug: piece.companySlug, style: piece.input.trim() }]);
+      updatePiece(key, pieceId, (p) => applyOutcome(p, found[slotKey(piece)]));
       // Show sizes straight away once the costume is found.
-      setPending((prev) => (prev.includes(key) ? prev : [...prev, key]));
+      queue(key);
     } catch (err) {
-      update(key, (x) => ({
-        ...x,
-        [which]: {
-          ...x[which]!,
-          status: "error",
-          error: err instanceof Error ? err.message : String(err),
-        },
+      updatePiece(key, pieceId, (p) => ({
+        ...p,
+        status: "error",
+        error: err instanceof Error ? err.message : String(err),
       }));
     }
   }
-
-  const ready = classes.filter((c) => classStatus(c).tone === "ok");
 
   async function sizeClasses(list: ClassState[]) {
     if (list.length === 0) return;
@@ -271,22 +329,27 @@ export function WorkbookView({
     setError(null);
     try {
       const payload = list.map((c) => {
-        const alt = new Set(c.alternate ? c.alternateRows : []);
-        const groupFor = (slot: CostumeSlot, dancers: ClassSheet["dancers"]) => ({
-          chartIds: slot.chartIds,
+        const alt = altGroup(c);
+        const altRows = new Set(alt ? c.alternateRows : []);
+        const groupFor = (piece: Piece, dancers: ImportedDancer[]) => ({
+          chartIds: piece.chartIds,
           dancers,
           costume: {
-            companyName: COMPANY_NAMES[slot.companySlug] ?? slot.companySlug,
-            styleNumber: slot.lookup!.costume.styleNumber,
-            name: slot.lookup!.costume.name,
-            availableSizes: slot.lookup!.costume.availableSizes,
-            defaultColorway: slot.colorway || undefined,
+            companyName: COMPANY_NAMES[piece.companySlug] ?? piece.companySlug,
+            styleNumber: piece.lookup!.costume.styleNumber,
+            name: piece.lookup!.costume.name,
+            availableSizes: piece.lookup!.costume.availableSizes,
+            defaultColorway: piece.colorway || undefined,
           },
         });
-        const groups = [groupFor(c.primary, c.cls.dancers.filter((d) => !alt.has(d.rowNumber)))];
-        if (c.alternate && alt.size > 0) {
-          groups.push(groupFor(c.alternate, c.cls.dancers.filter((d) => alt.has(d.rowNumber))));
-        }
+        const mainDancers = c.cls.dancers.filter((d) => !altRows.has(d.rowNumber));
+        const altDancers = c.cls.dancers.filter((d) => altRows.has(d.rowNumber));
+        const groups = [
+          ...filled(mainGroup(c).pieces).map((p) => groupFor(p, mainDancers)),
+          ...(alt && altDancers.length > 0
+            ? filled(alt.pieces).map((p) => groupFor(p, altDancers))
+            : []),
+        ];
         return { key: c.key, className: c.cls.className, groups };
       });
 
@@ -311,29 +374,36 @@ export function WorkbookView({
     }
   }
 
-  const sizeAll = () => sizeClasses(ready);
-
   // Size queued classes once their lookups have settled. A class that is not
   // ready (no chart picked yet, say) just drops out of the queue.
   useEffect(() => {
     if (pending.length === 0 || busy) return;
     const settled = classes.filter(
-      (c) =>
-        pending.includes(c.key) &&
-        c.primary.status !== "loading" &&
-        c.alternate?.status !== "loading",
+      (c) => pending.includes(c.key) && !allPieces(c).some((p) => p.status === "loading"),
     );
     if (settled.length === 0) return;
     setPending((prev) => prev.filter((k) => !settled.some((c) => c.key === k)));
     sizeClasses(settled.filter((c) => classStatus(c).tone === "ok"));
   }, [pending, classes, busy]);
 
+  /** Save a dancer typed into the app, then re-size their class. */
+  function saveDancer(key: string, dancer: ImportedDancer) {
+    update(key, (c) => {
+      const exists = c.cls.dancers.some((d) => d.rowNumber === dancer.rowNumber);
+      const dancers = exists
+        ? c.cls.dancers.map((d) => (d.rowNumber === dancer.rowNumber ? dancer : d))
+        : [...c.cls.dancers, dancer];
+      return { ...c, cls: { ...c.cls, dancers } };
+    });
+    queue(key);
+  }
+
   /** Every sized dancer across the workbook, with any override applied. */
   const allAssignments = useMemo(() => {
     const out: ExportAssignment[] = [];
     for (const r of Object.values(results)) {
       for (const a of r.assignments) {
-        const o = overrides[overrideKey(r.key, a)];
+        const o = overrides[overrideKey(r.key, a.rowNumber, a.styleNumber)];
         out.push(
           o?.size ? { ...a, overrideSize: o.size, overrideReason: o.reason || undefined } : a,
         );
@@ -386,12 +456,11 @@ export function WorkbookView({
    * Open the report as its own page and print it. The page is built here, in
    * the click, so the browser treats the new tab as something the user asked for.
    */
-  function printReport(only?: ClassState) {
+  function printReport(only: ClassState) {
     const reports = reportsFor(only);
     if (reports.length === 0) return;
-    const title = only ? only.cls.className : `${roster.fileName} - fit report`;
     const url = URL.createObjectURL(
-      new Blob([fitReportHtml(reports, title)], { type: "text/html" }),
+      new Blob([fitReportHtml(reports, only.cls.className)], { type: "text/html" }),
     );
     const win = window.open(url, "_blank");
     if (!win) setError("Your browser blocked the print window. Allow pop-ups for this page and try again.");
@@ -402,12 +471,11 @@ export function WorkbookView({
   async function downloadReport(only?: ClassState) {
     setBusy(true);
     try {
-      const reports = reportsFor(only);
       const res = await fetch("/api/export/report", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          reports,
+          reports: reportsFor(only),
           fileName: only ? only.cls.sheetName : roster.fileName,
         }),
       });
@@ -419,55 +487,9 @@ export function WorkbookView({
     }
   }
 
-  async function downloadFilled() {
-    setBusy(true);
-    try {
-      const targets: FillTarget[] = classes
-        .filter((c) => results[c.key] && !results[c.key].error)
-        .map((c) => {
-          const altStyle = c.alternate?.lookup?.costume.styleNumber;
-          return {
-            sheetName: c.cls.sheetName,
-            headerRow: c.cls.headerRow,
-            sizeColumn: c.cls.sizeColumn,
-            headerCount: c.cls.headers.length,
-            sizes: results[c.key].assignments.map((a) => {
-              const o = overrides[overrideKey(c.key, a)];
-              const size = o?.size || a.recommendedSize;
-              // Say which costume a boy's size is for, so it cannot be misread.
-              const value = altStyle && a.styleNumber === altStyle ? `${size} (${altStyle})` : size;
-              return { rowNumber: a.rowNumber ?? 0, value };
-            }),
-          };
-        });
-
-      const form = new FormData();
-      const sendOriginal = roster.fileKind === "xlsx" && file;
-      if (sendOriginal) form.append("file", file);
-      form.append(
-        "payload",
-        JSON.stringify({
-          targets,
-          fileName: roster.fileName,
-          // A CSV or PDF has no workbook to edit, so its grid is rebuilt instead.
-          sheets: sendOriginal
-            ? []
-            : roster.sheets
-                .filter((s) => targets.some((t) => t.sheetName === s.name))
-                .map((s) => ({ name: s.name, rows: s.rows })),
-        }),
-      );
-      const res = await fetch("/api/export/filled", { method: "POST", body: form });
-      await download(res, "sized.xlsx");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const sizedCount = allAssignments.length;
-  const hasResults = Object.keys(results).length > 0;
+  const sizedClasses = classes.filter((c) => results[c.key] && !results[c.key].error);
+  const waiting = classes.filter((c) => !sizedClasses.includes(c));
+  const anyEdits = classes.some((c) => c.cls.dancers.some((d) => d.source));
 
   return (
     <div className="space-y-5">
@@ -475,50 +497,53 @@ export function WorkbookView({
         title={roster.fileName}
         subtitle={
           <>
-            {classes.length} classes found
+            {classes.length} class{classes.length === 1 ? "" : "es"}
             {otherTabs.length > 0 ? ` · ignored: ${otherTabs.join(", ")}` : ""}
             {roster.fileKind === "pdf" ? " · read from PDF" : ""}
           </>
         }
         actions={
-          <>
-            <Button variant="ghost" onClick={onSingleClass}>
-              Size one tab at a time
-            </Button>
-            <Button variant="secondary" onClick={onStartOver}>
-              Upload a different file
-            </Button>
-          </>
+          <Button variant="ghost" onClick={onStartOver}>
+            Upload a different file
+          </Button>
         }
       >
-        <div className="flex flex-wrap items-center gap-3">
-          <Button onClick={sizeAll} disabled={busy || ready.length === 0}>
-            {busy ? "Working…" : `Size ${ready.length} ready class${ready.length === 1 ? "" : "es"}`}
-          </Button>
-          {hasResults ? (
-            <>
-              <Button variant="secondary" onClick={downloadOrder} disabled={busy || sizedCount === 0}>
-                Download order sheet
-              </Button>
-              <Button variant="secondary" onClick={() => downloadReport()} disabled={busy || sizedCount === 0}>
-                Download fit report (all classes)
-              </Button>
-              <Button variant="secondary" onClick={() => printReport()} disabled={busy || sizedCount === 0}>
-                Print all classes
-              </Button>
-              <Button variant="secondary" onClick={downloadFilled} disabled={busy || sizedCount === 0}>
-                Download {roster.fileKind === "xlsx" ? "my workbook" : "sheet"} with sizes filled in
-              </Button>
-              <span className="text-sm text-neutral-600 dark:text-neutral-400">
-                {sizedCount} dancers sized
-              </span>
-            </>
+        <Alert
+          kind={waiting.length === 0 ? "success" : "info"}
+          title={`${sizedClasses.length} of ${classes.length} classes sized`}
+        >
+          {waiting.length === 0 ? (
+            "Every class is sized."
           ) : (
-            <span className="text-sm text-neutral-600 dark:text-neutral-400">
-              Classes without a costume or measurements are skipped, not guessed at.
-            </span>
+            <ul className="mt-1 space-y-0.5">
+              {waiting.map((c) => (
+                <li key={c.key}>
+                  <span className="font-medium">{c.cls.sheetName}</span> — {classStatus(c).label}
+                </li>
+              ))}
+            </ul>
           )}
+        </Alert>
+
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Button onClick={downloadOrder} disabled={busy || allAssignments.length === 0}>
+            Download order sheet
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => downloadReport()}
+            disabled={busy || allAssignments.length === 0}
+          >
+            Download fit report (all classes)
+          </Button>
         </div>
+
+        {anyEdits ? (
+          <p className="mt-3 text-sm text-violet-800 dark:text-violet-200">
+            Dancers added or edited here stay until you close or refresh this page — update your
+            spreadsheet too.
+          </p>
+        ) : null}
         {error ? (
           <div className="mt-4">
             <Alert kind="error">{error}</Alert>
@@ -533,13 +558,17 @@ export function WorkbookView({
           charts={charts}
           result={results[c.key]}
           stale={Boolean(results[c.key]) && sizedAs[c.key] !== signature(c)}
-          onSize={() => sizeClasses([c])}
-          onPrint={() => printReport(c)}
-          onDownload={() => downloadReport(c)}
           overrides={overrides}
           busy={busy}
           onChange={(fn) => update(c.key, fn)}
-          onLookup={(which) => relookup(c.key, which)}
+          onChangePiece={(pieceId, patch) =>
+            updatePiece(c.key, pieceId, (p) => ({ ...p, ...patch }))
+          }
+          onLookup={(pieceId) => relookup(c.key, pieceId)}
+          onSize={() => sizeClasses([c])}
+          onPrint={() => printReport(c)}
+          onDownload={() => downloadReport(c)}
+          onSaveDancer={(d) => saveDancer(c.key, d)}
           onOverride={(k, size, reason) =>
             setOverrides((prev) => {
               const next = { ...prev };
@@ -554,49 +583,84 @@ export function WorkbookView({
   );
 }
 
+type Editing = { mode: "add" } | { mode: "edit"; rowNumber: number } | null;
+
 function ClassCard({
   state,
   charts,
   result,
   stale,
-  onSize,
-  onPrint,
-  onDownload,
   overrides,
   busy,
   onChange,
+  onChangePiece,
   onLookup,
+  onSize,
+  onPrint,
+  onDownload,
+  onSaveDancer,
   onOverride,
 }: {
   state: ClassState;
   charts: ChartInfo[];
   result?: ClassSizeResult;
   stale: boolean;
-  onSize: () => void;
-  onPrint: () => void;
-  onDownload: () => void;
   overrides: Overrides;
   busy: boolean;
   onChange: (fn: (c: ClassState) => ClassState) => void;
-  onLookup: (which: "primary" | "alternate") => void;
+  onChangePiece: (pieceId: string, patch: Partial<Piece>) => void;
+  onLookup: (pieceId: string) => void;
+  onSize: () => void;
+  onPrint: () => void;
+  onDownload: () => void;
+  onSaveDancer: (d: ImportedDancer) => void;
   onOverride: (key: string, size: string, reason: string) => void;
 }) {
   const { cls } = state;
   const status = classStatus(state);
-  const sizeable = cls.dancers.filter((d) => d.girth != null);
-  const notMeasured = cls.dancers.length - sizeable.length;
+  const notMeasured = cls.dancers.filter((d) => d.girth == null);
   const warnings = cls.dancers.flatMap((d) =>
     d.issues
       .filter((i) => i.severity === "warning")
       .map((i) => ({ name: d.name || `row ${d.rowNumber}`, message: i.message })),
   );
   const [showBoys, setShowBoys] = useState(false);
+  const [editing, setEditing] = useState<Editing>(null);
+  const [formErrors, setFormErrors] = useState<string[]>([]);
+  const alt = altGroup(state);
 
   const tone = {
     ok: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200",
     warn: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200",
     muted: "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300",
   }[status.tone];
+
+  const editingDancer =
+    editing?.mode === "edit" ? cls.dancers.find((d) => d.rowNumber === editing.rowNumber) : undefined;
+
+  function startEdit(next: Editing) {
+    setFormErrors([]);
+    setEditing(next);
+  }
+
+  function save(form: DancerForm) {
+    const rowNumber =
+      editingDancer?.rowNumber ??
+      Math.max(ADDED_ROW_BASE, ...cls.dancers.map((d) => d.rowNumber)) + 1;
+    const { dancer, errors } = buildManualDancer(form, { existing: editingDancer, rowNumber });
+    if (!dancer) {
+      setFormErrors(errors);
+      return;
+    }
+    onSaveDancer(dancer);
+    setEditing(null);
+    setFormErrors([]);
+  }
+
+  const setGroups = (fn: (groups: Group[]) => Group[]) =>
+    onChange((c) => ({ ...c, groups: fn(c.groups) }));
+
+  const firstCompany = mainGroup(state).pieces[0]?.companySlug ?? "awishcometrue";
 
   return (
     <Card
@@ -605,7 +669,7 @@ function ClassCard({
         <>
           {cls.sheetName}
           {cls.meta.teacher ? ` · ${cls.meta.teacher}` : ""} · {cls.dancers.length} dancers
-          {notMeasured > 0 ? ` · ${notMeasured} not measured` : ""}
+          {notMeasured.length > 0 ? ` · ${notMeasured.length} not measured` : ""}
           {cls.converted ? " · converted from cm" : ""}
         </>
       }
@@ -617,69 +681,125 @@ function ClassCard({
         </p>
       ) : null}
 
-      <div className="space-y-3">
-        <CostumeRow
-          label="Costume"
-          slot={state.primary}
-          charts={charts}
-          onChange={(slot) => onChange((c) => ({ ...c, primary: { ...c.primary, ...slot } }))}
-          onLookup={() => onLookup("primary")}
-        />
-        {state.alternate ? (
-          <CostumeRow
-            label={`${state.alternate.label} costume`}
-            slot={state.alternate}
-            charts={charts}
-            onChange={(slot) =>
-              onChange((c) => ({ ...c, alternate: c.alternate ? { ...c.alternate, ...slot } : null }))
+      <div className="space-y-4">
+        {state.groups.map((g) => (
+          <div key={g.id}>
+            <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold">{groupTitle(state, g)}</h3>
+              {g.id === "alt" ? (
+                <Button
+                  variant="ghost"
+                  onClick={() =>
+                    onChange((c) => ({
+                      ...c,
+                      groups: c.groups.filter((x) => x.id !== "alt"),
+                      alternateRows: [],
+                    }))
+                  }
+                >
+                  Remove {g.label.toLowerCase()}&apos; costume
+                </Button>
+              ) : null}
+            </div>
+            <div className="space-y-2">
+              {g.pieces.map((p, i) => (
+                <CostumeRow
+                  key={p.id}
+                  label={g.pieces.length > 1 ? `Piece ${i + 1}` : "Style"}
+                  slot={p}
+                  charts={charts}
+                  onChange={(patch) => onChangePiece(p.id, patch)}
+                  onLookup={() => onLookup(p.id)}
+                  onRemove={
+                    g.pieces.length > 1
+                      ? () =>
+                          setGroups((groups) =>
+                            groups.map((x) =>
+                              x.id === g.id
+                                ? { ...x, pieces: x.pieces.filter((y) => y.id !== p.id) }
+                                : x,
+                            ),
+                          )
+                      : undefined
+                  }
+                />
+              ))}
+            </div>
+            <button
+              type="button"
+              className="mt-1.5 text-sm font-medium text-neutral-600 underline hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white"
+              onClick={() =>
+                setGroups((groups) =>
+                  groups.map((x) =>
+                    x.id === g.id
+                      ? {
+                          ...x,
+                          pieces: [...x.pieces, newPiece(x.pieces[0]?.companySlug ?? firstCompany)],
+                        }
+                      : x,
+                  ),
+                )
+              }
+            >
+              + Add another piece (e.g. pants)
+            </button>
+          </div>
+        ))}
+
+        {!alt ? (
+          <Button
+            variant="secondary"
+            onClick={() =>
+              setGroups((groups) => [
+                ...groups,
+                { id: "alt", label: "Boys", pieces: [newPiece(firstCompany)] },
+              ])
             }
-            onLookup={() => onLookup("alternate")}
-          />
+          >
+            + Add a boys&apos; costume
+          </Button>
         ) : null}
       </div>
 
-      {state.alternate ? (
+      {alt ? (
         <div className="mt-4 rounded-lg border border-black/10 p-3 dark:border-white/15">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm">
               <span className="font-medium">
                 {state.alternateRows.length} dancer{state.alternateRows.length === 1 ? "" : "s"}
               </span>{" "}
-              will wear the {state.alternate.label} costume ({state.alternate.input}).
+              will wear the {alt.label.toLowerCase()}&apos; costume.
               {state.alternateRows.length === 0 ? (
                 <span className="block text-amber-700 dark:text-amber-300">
-                  Nobody is ticked yet, so everyone will be sized in {state.primary.input}.
+                  Nobody is ticked yet, so everyone will be sized in the main costume.
                 </span>
               ) : null}
             </p>
             <Button variant="secondary" onClick={() => setShowBoys((v) => !v)}>
-              {showBoys ? "Done" : `Choose who wears the ${state.alternate.label} costume`}
+              {showBoys ? "Done" : `Choose who wears the ${alt.label.toLowerCase()}' costume`}
             </Button>
           </div>
           {showBoys ? (
             <ul className="mt-3 grid grid-cols-1 gap-1 text-sm sm:grid-cols-2 lg:grid-cols-3">
-              {cls.dancers.map((d) => {
-                const checked = state.alternateRows.includes(d.rowNumber);
-                return (
-                  <li key={d.rowNumber}>
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(e) =>
-                          onChange((c) => ({
-                            ...c,
-                            alternateRows: e.target.checked
-                              ? [...c.alternateRows, d.rowNumber]
-                              : c.alternateRows.filter((r) => r !== d.rowNumber),
-                          }))
-                        }
-                      />
-                      <span>{d.name || `Row ${d.rowNumber}`}</span>
-                    </label>
-                  </li>
-                );
-              })}
+              {cls.dancers.map((d) => (
+                <li key={d.rowNumber}>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={state.alternateRows.includes(d.rowNumber)}
+                      onChange={(e) =>
+                        onChange((c) => ({
+                          ...c,
+                          alternateRows: e.target.checked
+                            ? [...c.alternateRows, d.rowNumber]
+                            : c.alternateRows.filter((r) => r !== d.rowNumber),
+                        }))
+                      }
+                    />
+                    <span>{d.name || `Row ${d.rowNumber}`}</span>
+                  </label>
+                </li>
+              ))}
             </ul>
           ) : null}
         </div>
@@ -699,12 +819,54 @@ function ClassCard({
         </div>
       ) : null}
 
+      {/* Dancers who can't be sized yet, with a way to fill them in. Once the
+          class is sized the report has an Edit button on every row instead. */}
+      {!result && notMeasured.length > 0 ? (
+        <div className="mt-4 text-sm">
+          <p className="font-medium">Not measured yet:</p>
+          <ul className="mt-1 flex flex-wrap gap-2">
+            {notMeasured.map((d) => (
+              <li key={d.rowNumber}>
+                <button
+                  type="button"
+                  onClick={() => startEdit({ mode: "edit", rowNumber: d.rowNumber })}
+                  className="rounded border border-rose-300 px-2 py-0.5 text-rose-800 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-200 dark:hover:bg-rose-950"
+                >
+                  {d.name || `Row ${d.rowNumber}`} — add measurements
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      <div className="mt-4">
+        {editing ? (
+          <DancerFormPanel
+            key={editing.mode === "edit" ? editing.rowNumber : "add"}
+            title={editingDancer ? `Edit ${editingDancer.name || "dancer"}` : "Add a dancer"}
+            initial={formFromDancer(editingDancer)}
+            errors={formErrors}
+            onSave={save}
+            onCancel={() => setEditing(null)}
+          />
+        ) : (
+          <Button variant="secondary" onClick={() => startEdit({ mode: "add" })}>
+            + Add dancer
+          </Button>
+        )}
+      </div>
+
       {status.tone === "ok" && (!result || stale) ? (
         <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-black/10 p-3 text-sm dark:border-white/15">
           <Button onClick={onSize} disabled={busy}>
             {busy ? "Sizing…" : result ? "Size again" : "Size this class"}
           </Button>
-          <span className={stale ? "text-amber-700 dark:text-amber-300" : "text-neutral-600 dark:text-neutral-400"}>
+          <span
+            className={
+              stale ? "text-amber-700 dark:text-amber-300" : "text-neutral-600 dark:text-neutral-400"
+            }
+          >
             {stale
               ? "You changed this class after it was sized, so the sizes below are out of date."
               : "Costume and chart are set."}
@@ -716,10 +878,11 @@ function ClassCard({
         <ClassResults
           state={state}
           result={result}
-          onPrint={onPrint}
-          onDownload={onDownload}
           overrides={overrides}
           busy={busy}
+          onPrint={onPrint}
+          onDownload={onDownload}
+          onEdit={(rowNumber) => startEdit({ mode: "edit", rowNumber })}
           onOverride={onOverride}
         />
       ) : null}
@@ -733,12 +896,14 @@ function CostumeRow({
   charts,
   onChange,
   onLookup,
+  onRemove,
 }: {
   label: string;
   slot: CostumeSlot;
   charts: ChartInfo[];
   onChange: (slot: Partial<CostumeSlot>) => void;
   onLookup: () => void;
+  onRemove?: () => void;
 }) {
   const costume = slot.lookup?.costume;
   const options = charts.filter((c) => c.companySlug === slot.companySlug && c.status === "confirmed");
@@ -753,7 +918,9 @@ function CostumeRow({
           <select
             className={inputClass}
             value={slot.companySlug}
-            onChange={(e) => onChange({ companySlug: e.target.value, status: "idle", lookup: undefined, chartIds: [] })}
+            onChange={(e) =>
+              onChange({ companySlug: e.target.value, status: "idle", lookup: undefined, chartIds: [] })
+            }
           >
             {COMPANIES.map((c) => (
               <option key={c.slug} value={c.slug}>
@@ -780,6 +947,11 @@ function CostumeRow({
         >
           {slot.status === "loading" ? "Looking up…" : "Look up"}
         </Button>
+        {onRemove ? (
+          <Button variant="ghost" onClick={onRemove}>
+            Remove
+          </Button>
+        ) : null}
       </div>
 
       {slot.status === "error" ? (
@@ -860,18 +1032,20 @@ function CostumeRow({
 function ClassResults({
   state,
   result,
-  onPrint,
-  onDownload,
   overrides,
   busy,
+  onPrint,
+  onDownload,
+  onEdit,
   onOverride,
 }: {
   state: ClassState;
   result: ClassSizeResult;
-  onPrint: () => void;
-  onDownload: () => void;
   overrides: Overrides;
   busy: boolean;
+  onPrint: () => void;
+  onDownload: () => void;
+  onEdit: (rowNumber: number) => void;
   onOverride: (key: string, size: string, reason: string) => void;
 }) {
   const [showAll, setShowAll] = useState(false);
@@ -886,21 +1060,21 @@ function ClassResults({
     );
   }
 
-  /** Sizes the studio could switch a dancer to, for this dancer's costume. */
+  /** Sizes the studio could switch a dancer to, for this piece. */
   const sizesFor = (styleNumber: string): string[] => {
-    const slot = [state.primary, state.alternate].find(
-      (s) => s?.lookup?.costume.styleNumber === styleNumber,
-    );
-    const listed = slot?.lookup?.costume.availableSizes ?? [];
+    const piece = allPieces(state).find((p) => p.lookup?.costume.styleNumber === styleNumber);
+    const listed = piece?.lookup?.costume.availableSizes ?? [];
     if (listed.length > 0) return listed;
     const chart = result.charts.find((c) => c.styleNumber === styleNumber);
     return chart?.rows.map((r) => r.code) ?? [];
   };
 
+  const multiPiece = result.charts.length > 1;
   const all = [...result.assignments].sort((a, b) => (a.rowNumber ?? 0) - (b.rowNumber ?? 0));
-  const altStyle = state.alternate?.lookup?.costume.styleNumber;
   const toCheck = all.filter(
-    (a) => severityOf(a.flags) !== "ok" || overrides[overrideKey(state.key, a)]?.size,
+    (a) =>
+      severityOf(a.flags) !== "ok" ||
+      overrides[overrideKey(state.key, a.rowNumber, a.styleNumber)]?.size,
   );
   const rows = showAll ? all : toCheck;
 
@@ -942,7 +1116,7 @@ function ClassResults({
     return (
       <div className="mt-4">
         {tabs}
-        <FitReportTable report={reportFor(state, result, overrides)} />
+        <FitReportTable report={reportFor(state, result, overrides)} onEdit={onEdit} />
       </div>
     );
   }
@@ -952,105 +1126,106 @@ function ClassResults({
       {tabs}
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-sm">
         <p>
-          <span className="font-medium">{all.length} sized</span>
+          <span className="font-medium">{all.length} sizes</span>
           {" · "}
           {toCheck.length} to check
           {result.skipped.length > 0 ? ` · ${result.skipped.length} not sized` : ""}
         </p>
         <Button variant="ghost" onClick={() => setShowAll((v) => !v)}>
-          {showAll ? "Show only dancers to check" : `Show all ${all.length} dancers`}
+          {showAll ? "Show only dancers to check" : `Show all ${all.length}`}
         </Button>
       </div>
       {rows.length === 0 ? (
         <p className="text-sm text-neutral-600 dark:text-neutral-400">
           Every size fell cleanly inside its chart range.
         </p>
-      ) : null}
-      <div className={`overflow-x-auto ${rows.length === 0 ? "hidden" : ""}`}>
-        <table className="w-full min-w-[760px] text-sm">
-          <thead>
-            <tr className="border-b border-black/10 text-left text-xs uppercase tracking-wide text-neutral-500 dark:border-white/15">
-              <th className="pb-2 pr-3 font-medium">Status</th>
-              <th className="pb-2 pr-3 font-medium">Dancer</th>
-              <th className="pb-2 pr-3 font-medium">Girth</th>
-              <th className="pb-2 pr-3 font-medium">Size</th>
-              <th className="pb-2 pr-3 font-medium">Override</th>
-              <th className="pb-2 font-medium">Why</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((a) => {
-              const k = overrideKey(state.key, a);
-              const override = overrides[k];
-              return (
-                <tr key={k} className="border-b border-black/5 align-top dark:border-white/10">
-                  <td className="py-2 pr-3">
-                    <SeverityBadge severity={severityOf(a.flags)} />
-                  </td>
-                  <td className="py-2 pr-3 font-medium">
-                    {a.dancerName}
-                    <span className="block text-xs font-normal text-neutral-500">
-                      {altStyle && a.styleNumber === altStyle ? `${a.styleNumber} · ` : ""}
-                      {a.colorway ?? "—"}
-                    </span>
-                  </td>
-                  <td className="py-2 pr-3 tabular-nums">{a.rawGirth}&quot;</td>
-                  <td className="py-2 pr-3">
-                    <span
-                      className={`font-mono font-semibold ${override?.size ? "text-neutral-400 line-through" : ""}`}
-                    >
-                      {a.recommendedSize}
-                    </span>
-                    {override?.size ? (
-                      <span className="ml-2 font-mono font-semibold">{override.size}</span>
-                    ) : null}
-                  </td>
-                  <td className="py-2 pr-3">
-                    <select
-                      className={`${inputClass} py-1`}
-                      value={override?.size ?? ""}
-                      disabled={busy}
-                      onChange={(e) => onOverride(k, e.target.value, override?.reason ?? "")}
-                    >
-                      <option value="">— keep —</option>
-                      {sizesFor(a.styleNumber).map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                    {override?.size ? (
-                      <input
-                        className={`${inputClass} mt-1 py-1`}
-                        placeholder="Reason (required)"
-                        value={override.reason}
-                        onChange={(e) => onOverride(k, override.size, e.target.value)}
-                      />
-                    ) : null}
-                  </td>
-                  <td className="py-2 text-neutral-600 dark:text-neutral-400">
-                    <p>{a.rationale}</p>
-                    {a.flags
-                      .filter((f) => f.severity !== "info")
-                      .map((f, i) => (
-                        <p
-                          key={i}
-                          className={`mt-1 ${
-                            f.severity === "blocking"
-                              ? "font-medium text-red-700 dark:text-red-300"
-                              : "text-amber-700 dark:text-amber-300"
-                          }`}
-                        >
-                          {f.message}
-                        </p>
-                      ))}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] text-sm">
+            <thead>
+              <tr className="border-b border-black/10 text-left text-xs uppercase tracking-wide text-neutral-500 dark:border-white/15">
+                <th className="pb-2 pr-3 font-medium">Status</th>
+                <th className="pb-2 pr-3 font-medium">Dancer</th>
+                <th className="pb-2 pr-3 font-medium">Girth</th>
+                <th className="pb-2 pr-3 font-medium">Size</th>
+                <th className="pb-2 pr-3 font-medium">Override</th>
+                <th className="pb-2 font-medium">Why</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((a) => {
+                const k = overrideKey(state.key, a.rowNumber, a.styleNumber);
+                const override = overrides[k];
+                return (
+                  <tr key={k} className="border-b border-black/5 align-top dark:border-white/10">
+                    <td className="py-2 pr-3">
+                      <SeverityBadge severity={severityOf(a.flags)} />
+                    </td>
+                    <td className="py-2 pr-3 font-medium">
+                      {a.dancerName}
+                      <span className="block text-xs font-normal text-neutral-500">
+                        {multiPiece ? `${a.styleNumber} ${a.costumeName} · ` : ""}
+                        {a.colorway ?? "—"}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-3 tabular-nums">{a.rawGirth}&quot;</td>
+                    <td className="py-2 pr-3">
+                      <span
+                        className={`font-mono font-semibold ${override?.size ? "text-neutral-400 line-through" : ""}`}
+                      >
+                        {a.recommendedSize}
+                      </span>
+                      {override?.size ? (
+                        <span className="ml-2 font-mono font-semibold">{override.size}</span>
+                      ) : null}
+                    </td>
+                    <td className="py-2 pr-3">
+                      <select
+                        className={`${inputClass} py-1`}
+                        value={override?.size ?? ""}
+                        disabled={busy}
+                        onChange={(e) => onOverride(k, e.target.value, override?.reason ?? "")}
+                      >
+                        <option value="">— keep —</option>
+                        {sizesFor(a.styleNumber).map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                      {override?.size ? (
+                        <input
+                          className={`${inputClass} mt-1 py-1`}
+                          placeholder="Reason (required)"
+                          value={override.reason}
+                          onChange={(e) => onOverride(k, override.size, e.target.value)}
+                        />
+                      ) : null}
+                    </td>
+                    <td className="py-2 text-neutral-600 dark:text-neutral-400">
+                      <p>{a.rationale}</p>
+                      {a.flags
+                        .filter((f) => f.severity !== "info")
+                        .map((f, i) => (
+                          <p
+                            key={i}
+                            className={`mt-1 ${
+                              f.severity === "blocking"
+                                ? "font-medium text-red-700 dark:text-red-300"
+                                : "text-amber-700 dark:text-amber-300"
+                            }`}
+                          >
+                            {f.message}
+                          </p>
+                        ))}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {result.skipped.length > 0 ? (
         <div className="mt-3 text-sm">
@@ -1058,7 +1233,14 @@ function ClassResults({
           <ul className="mt-1 space-y-0.5 text-neutral-600 dark:text-neutral-400">
             {result.skipped.map((s) => (
               <li key={`${s.rowNumber}-${s.dancerName}`}>
-                {s.dancerName} — {s.reason}
+                {s.dancerName} — {s.reason}{" "}
+                <button
+                  type="button"
+                  className="text-rose-700 underline dark:text-rose-300"
+                  onClick={() => onEdit(s.rowNumber)}
+                >
+                  Add measurements
+                </button>
               </li>
             ))}
           </ul>

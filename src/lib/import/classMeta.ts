@@ -29,10 +29,10 @@ export type ParsedCostume =
   | {
       status: "selected";
       companySlug: string;
-      /** The main costume, worn by everyone not marked for the alternate. */
-      primary: string;
-      /** A second style for some dancers, e.g. the boys' version. */
-      alternate?: { style: string; label: string };
+      /** The main costume's pieces, worn by everyone not marked for the alternate. */
+      pieces: string[];
+      /** A second costume for some dancers, e.g. the boys' top and pants. */
+      alternate?: { pieces: string[]; label: string };
       raw: string;
     }
   | { status: "not-selected"; raw: string }
@@ -117,32 +117,38 @@ export function parseCostumeText(raw: string | undefined): ParsedCostume {
   }
 
   const rest = text.replace(vendor.pattern, " ");
-  const parts = rest.split(/\s*(?:\/\/|\|)\s*|\s+\/\s+/).map((p) => p.trim()).filter(Boolean);
+  const sides = rest.split(/\s*(?:\/\/|\|)\s*|\s+\/\s+/).map((p) => p.trim()).filter(Boolean);
   const parse = STYLE_PARSERS[vendor.slug];
 
-  const styles = parts
-    .map((part) => {
-      const style = parse(part);
-      const label = /\(([^)]+)\)/.exec(part)?.[1]?.trim();
-      return style ? { style, label } : null;
+  // Each side of "//" is one group of dancers; within a side, "+", "&", ","
+  // or "and" separate the pieces of that costume ("16179G + 13182 (boy)").
+  const groups = sides
+    .map((side) => {
+      const label = /\(([^)]+)\)/.exec(side)?.[1]?.trim();
+      const pieces = side
+        .replace(/\([^)]*\)/g, " ")
+        .split(/\s*(?:\+|&|,|\band\b)\s*/i)
+        .map((part) => (part.trim() ? parse(part) : null))
+        .filter((style): style is string => style !== null);
+      return { pieces, label };
     })
-    .filter((s): s is { style: string; label: string | undefined } => s !== null);
+    .filter((g) => g.pieces.length > 0);
 
-  if (styles.length === 0) {
+  if (groups.length === 0) {
     return { status: "unreadable", raw: text, reason: "No style number found." };
   }
 
-  // The labelled style is the alternate, whichever order it was written in.
+  // The labelled group is the alternate, whichever order it was written in.
   const boyish = (l?: string) => Boolean(l && /\b(boys?|guys?|male|men)\b/i.test(l));
-  if (styles.length > 1 && boyish(styles[0].label) && !boyish(styles[1].label)) {
-    styles.reverse();
+  if (groups.length > 1 && boyish(groups[0].label) && !boyish(groups[1].label)) {
+    groups.reverse();
   }
-  const [first, second] = styles;
+  const [first, second] = groups;
   return {
     status: "selected",
     companySlug: vendor.slug,
-    primary: first.style,
-    ...(second ? { alternate: { style: second.style, label: second.label ?? "alternate" } } : {}),
+    pieces: first.pieces,
+    ...(second ? { alternate: { pieces: second.pieces, label: second.label ?? "alternate" } } : {}),
     raw: text,
   };
 }

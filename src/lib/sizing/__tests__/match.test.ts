@@ -222,8 +222,9 @@ describe("how a garment spec reads", () => {
       ...childGirlsChart,
       rows: childGirlsChart.rows.map((r) => ({ ...r, inseam: { min: 25, max: 25 } })),
     };
+    // 2" of room in the leg is a good fit, so nothing is said about it.
     const result = matchSize(
-      { girth: 45, bust: 27, waist: 24.5, hips: 28, inseam: 21 },
+      { girth: 45, bust: 27, waist: 24.5, hips: 28, inseam: 23 },
       chart,
       REGULAR_CHILD_SIZES,
     );
@@ -277,25 +278,50 @@ describe("advisory deviations and the exceptions list", () => {
 
 describe("single-value chart cells", () => {
   it("treats a single printed value as the garment's dimension, not a fit range", () => {
-    // Revolution prints INSEAM as one number per size - the length the costume
-    // is cut to. Flagging every dancer whose leg differs from it made a whole
-    // class look like it needed review.
+    // Revolution prints HEIGHT and INSEAM as one number per size - the garment's
+    // own dimension. Outside of inseam (which has its own rule) a difference is
+    // noted, never raised.
+    const chart: typeof childGirlsChart = {
+      ...childGirlsChart,
+      rows: childGirlsChart.rows.map((r) => ({ ...r, height: { min: 50, max: 50 } })),
+    };
+    const result = matchSize({ girth: 45, height: 46 }, chart, REGULAR_CHILD_SIZES);
+    const height = result.flags.find((f) => f.measure === "height");
+    expect(height?.severity).toBe("info");
+    expect(height?.message).toMatch(/garment is cut to 50"/);
+    expect(result.flags.filter((f) => f.severity === "warning")).toEqual([]);
+  });
+
+  describe("inseam against the garment's leg length", () => {
     const chart: typeof childGirlsChart = {
       ...childGirlsChart,
       rows: childGirlsChart.rows.map((r) => ({ ...r, inseam: { min: 25, max: 25 } })),
     };
+    const inseamFlag = (inseam: number) =>
+      matchSize({ girth: 45, inseam }, chart, REGULAR_CHILD_SIZES).flags.find(
+        (f) => f.measure === "inseam",
+      );
 
-    const result = matchSize(
-      { girth: 45, bust: 27, waist: 24.5, hips: 28, inseam: 21 },
-      chart,
-      REGULAR_CHILD_SIZES,
-    );
+    it("alerts when the dancer's leg is longer than the garment's", () => {
+      const f = inseamFlag(26);
+      expect(f).toMatchObject({ severity: "warning", direction: "over", delta: 1 });
+      expect(f?.message).toMatch(/too short/);
+    });
 
-    const inseam = result.flags.find((f) => f.measure === "inseam");
-    expect(inseam?.severity).toBe("info");
-    expect(inseam?.message).toMatch(/garment is cut to 25"/);
-    // It must not appear on the exceptions list.
-    expect(result.flags.filter((f) => f.severity === "warning")).toEqual([]);
+    it("notes a leg exactly the garment length - no room to grow", () => {
+      expect(inseamFlag(25)).toMatchObject({ severity: "info" });
+      expect(inseamFlag(25)?.message).toMatch(/right on/);
+    });
+
+    it.each([24, 22.5, 21.5])("says nothing when the garment is a little longer (%s)", (v) => {
+      expect(inseamFlag(v)).toBeUndefined();
+    });
+
+    it("alerts when the garment is 4\" or more longer than the leg", () => {
+      const f = inseamFlag(21);
+      expect(f).toMatchObject({ severity: "warning", direction: "under", delta: 4 });
+      expect(f?.message).toMatch(/too long/);
+    });
   });
 
   it("still flags a genuine range that the dancer falls outside", () => {

@@ -6,15 +6,25 @@ describe("parseCostumeText", () => {
     expect(parseCostumeText("A Wish 10096Y  //  16179G (boy)")).toEqual({
       status: "selected",
       companySlug: "awishcometrue",
-      primary: "10096Y",
-      alternate: { style: "16179G", label: "boy" },
+      pieces: ["10096Y"],
+      alternate: { pieces: ["16179G"], label: "boy" },
       raw: "A Wish 10096Y // 16179G (boy)",
     });
   });
 
   it("puts the boys' style second even when it is written first", () => {
     const parsed = parseCostumeText("A Wish 24183 (boy) // 24182");
-    expect(parsed).toMatchObject({ primary: "24182", alternate: { style: "24183", label: "boy" } });
+    expect(parsed).toMatchObject({ pieces: ["24182"], alternate: { pieces: ["24183"], label: "boy" } });
+  });
+
+  it("reads several pieces for one group - a boys' top and pants", () => {
+    expect(parseCostumeText("A Wish 10096Y // 16179G + 13182 (boy)")).toMatchObject({
+      pieces: ["10096Y"],
+      alternate: { pieces: ["16179G", "13182"], label: "boy" },
+    });
+    expect(parseCostumeText("Weissman 19544 & 19545")).toMatchObject({
+      pieces: ["19544", "19545"],
+    });
   });
 
   it.each([
@@ -23,8 +33,8 @@ describe("parseCostumeText", () => {
     ["A Wish H745", "awishcometrue", "H745"],
     ["A Wish Come True 27083y", "awishcometrue", "27083Y"],
     ["Revolution 27776", "revolution", "27776"],
-  ])("reads %s", (raw, companySlug, primary) => {
-    expect(parseCostumeText(raw)).toMatchObject({ status: "selected", companySlug, primary });
+  ])("reads %s", (raw, companySlug, piece) => {
+    expect(parseCostumeText(raw)).toMatchObject({ status: "selected", companySlug, pieces: [piece] });
   });
 
   it.each(["NOT SELECTED YET", "not selected", "TBD", "", "—", undefined])(

@@ -1,18 +1,12 @@
 import { NextResponse } from "next/server";
-import { detectHeaderRow, guessMapping } from "@/lib/import/headers";
-import { parseWorkbook, readRoster, type ParsedSheet } from "@/lib/import/parse";
+import { parseWorkbook, type ParsedSheet } from "@/lib/import/parse";
 import { parsePdf, PdfReadError } from "@/lib/import/pdf";
-import { isCostumeWorkbook, readCostumeWorkbook } from "@/lib/import/workbook";
+import { readCostumeWorkbook } from "@/lib/import/workbook";
 
 /**
  * Accept a studio's roster - a spreadsheet, a CSV, or a PDF saved from one -
- * and hand back everything the next screen needs in one round trip: the raw
- * grid, the header row we found, the guessed column mapping, the dancers that
- * mapping produces, and (for a workbook with a tab per class) each class with
- * the costume written on it.
- *
- * The grid comes back with the response so that changing the mapping afterwards
- * is a pure re-derivation and never asks the user to upload the file again.
+ * and hand back every tab read as a class: its dancers, the costume written on
+ * it, and anything on the sheet that needs a second look.
  */
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -45,37 +39,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "That file has no sheets." }, { status: 400 });
     }
 
-    const parsed = sheets.map((sheet) => {
-      const headerRow = detectHeaderRow(sheet.rows);
-      const headers = (sheet.rows[headerRow] ?? []).map((c) => String(c ?? ""));
-      const mapping = guessMapping(headers);
-      const roster = readRoster(sheet.rows, headerRow, mapping);
-      return {
-        name: sheet.name,
-        rows: sheet.rows,
-        headerRow,
-        headers,
-        mapping,
-        ...roster,
-      };
-    });
-
-    const classes = readCostumeWorkbook(sheets);
-
-    // Default to whichever sheet yielded the most dancers - studios often keep
-    // notes or a summary tab alongside the roster.
-    const bestIndex = parsed.reduce(
-      (best, s, i) => (s.dancers.length > parsed[best].dancers.length ? i : best),
-      0,
-    );
-
     return NextResponse.json({
       fileName: file.name,
       fileKind: pdf ? "pdf" : /\.csv$/i.test(file.name) ? "csv" : "xlsx",
-      sheets: parsed,
-      selectedSheet: bestIndex,
-      classes,
-      workbook: isCostumeWorkbook(classes),
+      classes: readCostumeWorkbook(sheets),
     });
   } catch (err) {
     return NextResponse.json(
