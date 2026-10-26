@@ -62,7 +62,9 @@ export function runSizing(input: RunInput): RunResult {
       skipped.push({
         dancerName: dancer.name || `(row ${dancer.rowNumber})`,
         rowNumber: dancer.rowNumber,
-        reason: "No girth measurement on file; girth decides the size.",
+        reason: dancer.notes
+          ? `No girth measurement on file (sheet says: "${dancer.notes}").`
+          : "No girth measurement on file; girth decides the size.",
       });
       continue;
     }

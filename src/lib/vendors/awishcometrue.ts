@@ -24,7 +24,7 @@ const SLUG = "awishcometrue";
 const BASE = "https://awishcometrue.com";
 
 /** `<h1>27364 Friendship and Magic</h1>` */
-const H1_PATTERN = /^\s*([A-Z]{0,3}\d{4,6}[A-Z]?)\s+(.+?)\s*$/i;
+const H1_PATTERN = /^\s*([A-Z]{0,3}\d{3,6}[A-Z]?)\s+(.+?)\s*$/i;
 
 const tlsRelaxed = new Agent({ connect: { rejectUnauthorized: false } });
 
@@ -48,12 +48,12 @@ export const awishcometrueAdapter: VendorAdapter = {
 
   parseStyleNumber(input: string): string | null {
     const trimmed = input.trim();
-    const direct = /^[A-Za-z]{0,3}\d{4,6}[A-Za-z]?$/.exec(trimmed);
+    const direct = /^[A-Za-z]{0,3}\d{3,6}[A-Za-z]?$/.exec(trimmed);
     if (direct) return direct[0].toUpperCase();
     // Pull it out of a product URL like /27083y-swinging-on-a-star
-    const fromUrl = /\/([a-z]{0,3}\d{4,6}[a-z]?)-/i.exec(trimmed);
+    const fromUrl = /\/([a-z]{0,3}\d{3,6}[a-z]?)-/i.exec(trimmed);
     if (fromUrl) return fromUrl[1].toUpperCase();
-    const embedded = /\b([A-Za-z]{0,3}\d{4,6}[A-Za-z]?)\b/.exec(trimmed);
+    const embedded = /\b([A-Za-z]{0,3}\d{3,6}[A-Za-z]?)\b/.exec(trimmed);
     return embedded ? embedded[1].toUpperCase() : null;
   },
 
@@ -122,7 +122,37 @@ export const awishcometrueAdapter: VendorAdapter = {
   async scrape(url: string): Promise<ScrapedCostume> {
     return this.parse(await fetchProduct(url), url);
   },
+
+  /**
+   * Product URLs carry a name slug (/10096y-choo-choo-chboogie), so a bare
+   * style number cannot be turned into a URL directly. The site's own search
+   * returns the product link, which is matched on the exact style prefix so
+   * that "24182" never picks up "24182Y".
+   */
+  async findProductUrl(style: string): Promise<string | null> {
+    const html = await fetchProduct(`${BASE}/Search?searchterm=${encodeURIComponent(style)}`);
+    return findStyleLink(html, style);
+  },
 };
+
+/** Pull the product link for exactly this style out of a search results page. */
+export function findStyleLink(html: string, style: string): string | null {
+  const $ = cheerio.load(html);
+  const prefix = `/${style.toLowerCase()}-`;
+  const hit = $("a[href]")
+    .map((_, el) => $(el).attr("href") ?? "")
+    .get()
+    .map((href) => (href.startsWith("/") ? `${BASE}${href}` : href))
+    .find((href) => {
+      try {
+        const u = new URL(href);
+        return u.hostname.endsWith("awishcometrue.com") && u.pathname.toLowerCase().startsWith(prefix);
+      } catch {
+        return false;
+      }
+    });
+  return hit ?? null;
+}
 
 function dedupeByName(colorways: ScrapedColorway[]): ScrapedColorway[] {
   const seen = new Set<string>();

@@ -33,6 +33,10 @@ export interface ImportedDancer {
   name: string;
   externalId?: string;
   colorway?: string;
+  /** As written on the sheet ("M", "boy", "Girl"); used to pre-tick boy costumes. */
+  gender?: string;
+  /** The sheet's own Notes cell, e.g. "Measurements not taken yet". */
+  notes?: string;
   girth?: number;
   bust?: number;
   waist?: number;
@@ -172,9 +176,28 @@ export function readRoster(
     }
 
     const issues: RowIssue[] = [];
-    const name = resolveName(row, text);
+    const { name, dateLike } = resolveName(row, byField, text);
+    const hasMeasurement = MEASURE_FIELDS.some((f) => {
+      const v = cell(row, f);
+      return v != null && String(v).trim() !== "";
+    });
+
+    // A line with no name and no numbers is a footer or a stray note under the
+    // table ("Measurements in inches..."), not a dancer.
+    if (!name && !hasMeasurement) {
+      skippedRows++;
+      continue;
+    }
+
     if (!name) {
       issues.push({ severity: "error", message: "No dancer name on this row.", field: "name" });
+    }
+    if (dateLike) {
+      issues.push({
+        severity: "warning",
+        field: "firstName",
+        message: `The name reads as a date (${dateLike}). Excel probably turned the name into a date - check the original sheet.`,
+      });
     }
 
     const dancer: ImportedDancer = {
@@ -182,6 +205,8 @@ export function readRoster(
       name: name ?? "",
       externalId: text(row, "externalId"),
       colorway: text(row, "colorway"),
+      gender: text(row, "gender"),
+      notes: text(row, "notes"),
       issues,
     };
 
@@ -205,7 +230,9 @@ export function readRoster(
         severity: "error",
         field: "girth",
         message:
-          "No girth measurement. Girth decides the size, so this dancer cannot be sized until it is recorded.",
+          !hasMeasurement && dancer.notes
+            ? `Not measured - the sheet says: "${dancer.notes}".`
+            : "No girth measurement. Girth decides the size, so this dancer cannot be sized until it is recorded.",
       });
     }
 
@@ -217,15 +244,57 @@ export function readRoster(
 
 function resolveName(
   row: unknown[],
+  byField: Map<ImportField, number>,
   text: (row: unknown[], field: ImportField) => string | undefined,
-): string | undefined {
-  const whole = text(row, "name");
-  if (whole) return whole;
+): { name: string | undefined; dateLike?: string } {
+  // Excel silently turns some typed names into dates, which then arrive as a
+  // serial number. Show it as a date so the user can recognise what happened.
+  let dateLike: string | undefined;
+  const readPart = (field: ImportField): string | undefined => {
+    const idx = byField.get(field);
+    const raw = idx === undefined ? null : row[idx];
+    const asDate = excelDateText(raw);
+    if (asDate) {
+      dateLike = asDate;
+      return asDate;
+    }
+    return text(row, field);
+  };
+
+  const whole = readPart("name");
   // Sheets frequently split the name across two columns.
-  const first = text(row, "firstName");
-  const last = text(row, "lastName");
-  const joined = [first, last].filter(Boolean).join(" ").trim();
-  return joined.length > 0 ? joined : undefined;
+  const joined =
+    whole ?? [readPart("firstName"), readPart("lastName")].filter(Boolean).join(" ").trim();
+  if (!joined) return { name: undefined, dateLike };
+
+  // A PDF prints the converted date as text, sometimes run into the surname:
+  // "2026-06-01 00:00:Myers".
+  const leading = /^(\d{4}-\d{2}-\d{2})(?:[ T]\d{1,2}:\d{2}(?::\d{2})?)?:?\s*(.*)$/.exec(joined);
+  if (leading) {
+    return { name: `${leading[1]} ${leading[2]}`.trim(), dateLike: dateLike ?? leading[1] };
+  }
+  return { name: joined, dateLike };
+}
+
+/** Excel serials for 1990-2100, the range a mis-typed name lands in. */
+const EXCEL_DATE_MIN = 32874;
+const EXCEL_DATE_MAX = 73051;
+
+/**
+ * If a name cell holds a date - an Excel serial number or ISO-looking text -
+ * return it as `YYYY-MM-DD`, otherwise undefined.
+ */
+export function excelDateText(raw: unknown): string | undefined {
+  if (raw instanceof Date) return raw.toISOString().slice(0, 10);
+  if (typeof raw === "number" && raw >= EXCEL_DATE_MIN && raw <= EXCEL_DATE_MAX) {
+    const ms = Math.round((raw - 25569) * 86400 * 1000);
+    return new Date(ms).toISOString().slice(0, 10);
+  }
+  if (typeof raw === "string") {
+    const m = /^\s*(\d{4}-\d{2}-\d{2})(?:[ T]\d{1,2}:\d{2}(?::\d{2})?:?)?\s*$/.exec(raw);
+    if (m) return m[1];
+  }
+  return undefined;
 }
 
 /** Infer inches vs centimetres from the middle of the girth distribution. */

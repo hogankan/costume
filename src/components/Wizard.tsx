@@ -10,6 +10,7 @@ import { DEFAULT_SIZING_OPTIONS, type SizingOptions } from "@/lib/sizing/types";
 import { StepRoster } from "./StepRoster";
 import { StepCostume } from "./StepCostume";
 import { StepResults } from "./StepResults";
+import { WorkbookView } from "./WorkbookView";
 import { Steps } from "./ui";
 import type {
   ChartInfo,
@@ -38,6 +39,10 @@ export function Wizard() {
 
   // Step 1
   const [roster, setRoster] = useState<RosterResponse | null>(null);
+  /** The uploaded file, kept so its own workbook can be returned with sizes filled in. */
+  const [file, setFile] = useState<File | null>(null);
+  /** A workbook can still be sized one tab at a time if the user prefers. */
+  const [singleClass, setSingleClass] = useState(false);
   const [sheetIndex, setSheetIndex] = useState(0);
   const [className, setClassName] = useState("");
   const [convertToIn, setConvertToIn] = useState(false);
@@ -120,6 +125,8 @@ export function Wizard() {
       if (!res.ok) throw new Error(data.error);
 
       setRoster(data);
+      setFile(file);
+      setSingleClass(false);
       setSheetIndex(data.selectedSheet);
       const chosen: SheetData = data.sheets[data.selectedSheet];
       // A centimetre sheet is converted by default; the user can turn it off.
@@ -333,16 +340,37 @@ export function Wizard() {
       <header className="mb-7">
         <h1 className="text-xl font-semibold tracking-tight">Costume Sizing</h1>
         <p className="mt-1 max-w-2xl text-sm text-neutral-600 dark:text-neutral-400">
-          Upload a class roster, pick the costume, and get a size for every dancer — with the ones
-          who need a human decision called out. Girth decides the size and rounds up, because a
+          Upload a class roster or a whole costume workbook (.xlsx, .csv or PDF), and get a size for
+          every dancer — with the ones who need a human decision called out. Girth decides the size and rounds up, because a
           costume that is too short in girth cannot be worn or altered.
         </p>
-        <div className="mt-4">
-          <Steps current={step} labels={STEPS} />
-        </div>
+        {roster?.workbook && !singleClass ? null : (
+          <div className="mt-4">
+            <Steps current={step} labels={STEPS} />
+          </div>
+        )}
       </header>
 
-      {step === 1 ? (
+      {roster?.workbook && !singleClass ? (
+        <WorkbookView
+          key={`${roster.fileName}-${file?.lastModified ?? 0}`}
+          roster={roster}
+          file={file}
+          charts={charts}
+          onStartOver={() => {
+            setRoster(null);
+            setFile(null);
+            setError(null);
+            setStep(1);
+          }}
+          onSingleClass={() => {
+            setSingleClass(true);
+            setStep(1);
+          }}
+        />
+      ) : null}
+
+      {(!roster?.workbook || singleClass) && step === 1 ? (
         <StepRoster
           roster={roster}
           sheet={sheet}
@@ -368,7 +396,7 @@ export function Wizard() {
         />
       ) : null}
 
-      {step === 2 ? (
+      {(!roster?.workbook || singleClass) && step === 2 ? (
         <StepCostume
           companySlug={companySlug}
           costume={costume}
@@ -401,7 +429,7 @@ export function Wizard() {
         />
       ) : null}
 
-      {step === 3 ? (
+      {(!roster?.workbook || singleClass) && step === 3 ? (
         <StepResults
           assignments={assignments}
           skipped={skipped}

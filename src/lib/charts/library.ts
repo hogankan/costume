@@ -122,3 +122,54 @@ export function saveChart(chart: StoredChart, root = CHARTS_DIR): string {
 `);
   return p;
 }
+
+/**
+ * Size against several charts at once - for a costume made in both child and
+ * adult sizes, which vendors print as separate charts. The rows are pooled,
+ * smallest chart first; the matcher orders by girth regardless.
+ *
+ * Refuses rather than guesses when the charts disagree about what a size code
+ * means or about which measurement decides the size.
+ */
+export function combineCharts(charts: LibraryChart[]): SizeChart {
+  if (charts.length === 0) throw new Error("No size chart chosen.");
+  if (charts.length === 1) return toSizeChart(charts[0]);
+
+  const converted = charts
+    .map(toSizeChart)
+    .sort((a, b) => (a.rows[0]?.girth.min ?? 0) - (b.rows[0]?.girth.min ?? 0));
+
+  const primaries = new Set(converted.map((c) => c.primaryMeasurement ?? "girth"));
+  if (primaries.size > 1) {
+    throw new Error(
+      `These charts size on different measurements (${[...primaries].join(" and ")}), so they cannot be used together.`,
+    );
+  }
+
+  const seen = new Map<string, string>();
+  const rows: SizeRow[] = [];
+  for (const chart of converted) {
+    for (const row of chart.rows) {
+      const code = row.code.trim().toUpperCase();
+      const other = seen.get(code);
+      if (other) {
+        throw new Error(
+          `Size ${row.code} appears on both ${other} and ${chart.variant}, so it is unclear which measurements apply. Pick one chart for it.`,
+        );
+      }
+      seen.set(code, chart.variant);
+      rows.push({ ...row, ordinal: rows.length });
+    }
+  }
+
+  return {
+    id: converted.map((c) => c.id).join("+"),
+    companySlug: converted[0].companySlug,
+    variant: converted.map((c) => c.variant).join("+"),
+    // Only as trustworthy as the least-checked chart in the set.
+    status: converted.every((c) => c.status === "confirmed") ? "confirmed" : "draft",
+    rows,
+    notes: converted.flatMap((c) => c.notes ?? []),
+    primaryMeasurement: converted[0].primaryMeasurement,
+  };
+}

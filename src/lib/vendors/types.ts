@@ -48,6 +48,11 @@ export interface VendorAdapter {
   parse(html: string, url: string): ScrapedCostume;
   /** Fetch and parse. */
   scrape(url: string): Promise<ScrapedCostume>;
+  /**
+   * Turn a bare style number into a product URL, for vendors whose URLs cannot
+   * be built from the number alone. Null when the vendor has no such product.
+   */
+  findProductUrl?(style: string): Promise<string | null>;
 }
 
 export class VendorScrapeError extends Error {}

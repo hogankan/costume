@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { awishcometrueAdapter } from "../awishcometrue";
+import { awishcometrueAdapter, findStyleLink } from "../awishcometrue";
 import { VendorScrapeError } from "../types";
 
 /** Parsed against a real page captured from awishcometrue.com. */
@@ -73,11 +73,30 @@ describe("a wish come true style numbers", () => {
     ["27083y", "27083Y"],
     ["https://awishcometrue.com/27083y-swinging-on-a-star", "27083Y"],
     ["https://awishcometrue.com/27364-friendship-and-magic", "27364"],
+    // Holiday styles carry a letter prefix and only three digits.
+    ["H745", "H745"],
+    ["https://awishcometrue.com/h686y-tangled-in-tinsel", "H686Y"],
   ])("parses %s", (input, expected) => {
     expect(awishcometrueAdapter.parseStyleNumber(input)).toBe(expected);
   });
 
   it("returns null when there is nothing to find", () => {
     expect(awishcometrueAdapter.parseStyleNumber("no digits here")).toBeNull();
+  });
+});
+
+describe("a wish come true search results", () => {
+  const page = `
+    <a href="https://awishcometrue.com/24182y-jackson">Jackson (youth)</a>
+    <a href="/24182-jackson">Jackson</a>
+    <a href="https://example.com/24182-jackson">elsewhere</a>`;
+
+  it("picks the product whose URL starts with exactly this style", () => {
+    expect(findStyleLink(page, "24182")).toBe("https://awishcometrue.com/24182-jackson");
+    expect(findStyleLink(page, "24182Y")).toBe("https://awishcometrue.com/24182y-jackson");
+  });
+
+  it("returns null when the search found nothing", () => {
+    expect(findStyleLink("<p>No results</p>", "99999")).toBeNull();
   });
 });

@@ -19,6 +19,8 @@ export const IMPORT_FIELDS = [
   "inseam",
   "height",
   "colorway",
+  "gender",
+  "notes",
 ] as const;
 
 export type ImportField = (typeof IMPORT_FIELDS)[number];
@@ -42,7 +44,16 @@ const SYNONYMS: Record<ImportField, string[]> = {
   inseam: ["inseam", "in seam", "leg", "leg length"],
   height: ["height", "ht", "tall"],
   colorway: ["color", "colour", "costume color", "costume colour", "shade"],
+  gender: ["gender", "sex", "boy girl", "girl boy", "m f", "boy"],
+  notes: ["notes", "note", "comments", "comment"],
 };
+
+/**
+ * Fields that only match when the header itself contains one of the synonyms,
+ * never the other way round. Without this a "COSTUME" label above the table
+ * reads as a likely "costume color" column.
+ */
+const CONTAINS_ONLY: ReadonlySet<ImportField> = new Set(["colorway", "gender", "notes"]);
 
 /** Headers that look like measurements but are not the ones we want. */
 const NEGATIVE = ["shoe", "sock", "tights", "head", "hat", "glove", "age", "grade", "phone", "email"];
@@ -77,7 +88,11 @@ export function guessMapping(headers: string[]): HeaderGuess[] {
         if (synonyms.includes(n)) {
           candidates.push({ field, confidence: "exact" });
         } else if (
-          synonyms.some((s) => s.length > 2 && (n.includes(s) || s.includes(n)))
+          synonyms.some(
+            (s) =>
+              s.length > 2 &&
+              (n.includes(s) || (!CONTAINS_ONLY.has(field) && s.includes(n))),
+          )
         ) {
           candidates.push({ field, confidence: "likely" });
         }

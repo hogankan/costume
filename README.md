@@ -116,6 +116,22 @@ enter a costume by **style number or product URL** - e.g. `27776`. A style numbe
 is answered from the crawled catalogue without contacting the vendor; a URL that
 has not been crawled is fetched directly.
 
+### A whole costume workbook at once
+
+Drop in `sample-data/holiday-costume-workbook.xlsx` (or the `.pdf` of it). A
+workbook with one tab per class, each with a `COSTUME` line above its table
+(e.g. `A Wish 10096Y // 16179G (boy)`), is sized in one go:
+
+- the costume is read from each tab and looked up automatically;
+- a second style marked `(boy)` adds a checkbox list to choose who wears it;
+- tabs marked `NOT SELECTED YET`, or with no measurements, are shown and skipped;
+- two downloads: the order sheet, and the studio's own workbook with the Size
+  column filled in (formatting kept).
+
+PDFs are read from their text, so a PDF saved from Excel or Sheets works; a
+scanned or photographed sheet is refused with a message rather than guessed at.
+Regenerate the sample with `npx tsx scripts/make-sample-workbook.ts`.
+
 Sizing needs at least one confirmed chart, so run `npm run charts:seed` first.
 Until then the app will tell you no charts have been read rather than guessing.
 

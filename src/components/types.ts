@@ -5,6 +5,7 @@ import type { ChartResolution } from "@/lib/charts/resolve";
 import type { ExportAssignment } from "@/lib/export/orderSheet";
 import type { SkippedDancer } from "@/lib/sizing/run";
 import type { SizeRow } from "@/lib/sizing/types";
+import type { ClassSheet } from "@/lib/import/workbook";
 
 export interface SheetData {
   name: string;
@@ -19,8 +20,13 @@ export interface SheetData {
 
 export interface RosterResponse {
   fileName: string;
+  fileKind: "xlsx" | "csv" | "pdf";
   sheets: SheetData[];
   selectedSheet: number;
+  /** Every tab read as a class, with the costume written on it. */
+  classes: ClassSheet[];
+  /** True when the file is a costume workbook (several classes, or a COSTUME line). */
+  workbook: boolean;
 }
 
 export interface ChartInfo {

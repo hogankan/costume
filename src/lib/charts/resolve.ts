@@ -25,6 +25,12 @@ export type ResolutionConfidence = "exact" | "high" | "ambiguous" | "unmatched";
 export interface ChartResolution {
   /** Null whenever a human must choose - `ambiguous` or `unmatched`. */
   chart: ChartCandidate | null;
+  /**
+   * Set when no single chart covers the costume but two charts do between
+   * them - a costume made in both child and adult sizes, which vendors print
+   * as separate charts. Both are used together.
+   */
+  combined?: ChartCandidate[];
   confidence: ResolutionConfidence;
   /** Ranked alternatives to show in the picker. */
   candidates: ChartCandidate[];
@@ -106,6 +112,18 @@ export function resolveChart(
   const complete = scored.filter((s) => s.complete);
 
   if (complete.length === 0) {
+    const pair = coveringPair(wanted, charts);
+    if (pair) {
+      const [a, b] = pair;
+      return {
+        chart: null,
+        combined: pair,
+        confidence: "high",
+        candidates: pair,
+        unmatchedCodes: [],
+        reason: `This costume comes in sizes from two charts: ${a.variant} (${sharedCodes(wanted, a).join(", ")}) and ${b.variant} (${sharedCodes(wanted, b).join(", ")}). Both are used.`,
+      };
+    }
     const best = scored[0];
     return {
       chart: null,
@@ -162,6 +180,33 @@ export function resolveChart(
     unmatchedCodes: [],
     reason: `Size codes ${[...wanted].join(", ")} are covered by ${complete.length} charts (${complete.map((s) => s.chart.variant).join(", ")}). Pick the right one once and it will be remembered for this costume.`,
   };
+}
+
+const sharedCodes = (wanted: Set<string>, chart: ChartCandidate) => {
+  const codes = new Set(chart.sizeCodes.map(norm));
+  return [...wanted].filter((c) => codes.has(c));
+};
+
+/**
+ * Two charts that between them cover every size, without both claiming the
+ * same size code (which would make "MC" mean two different things). Only an
+ * unambiguous pair is returned; anything else is left for a person to pick.
+ */
+function coveringPair(
+  wanted: Set<string>,
+  charts: ChartCandidate[],
+): [ChartCandidate, ChartCandidate] | null {
+  const pairs: [ChartCandidate, ChartCandidate][] = [];
+  for (let i = 0; i < charts.length; i++) {
+    for (let j = i + 1; j < charts.length; j++) {
+      const a = sharedCodes(wanted, charts[i]);
+      const b = sharedCodes(wanted, charts[j]);
+      if (a.length === 0 || b.length === 0) continue;
+      if (a.some((c) => b.includes(c))) continue;
+      if (a.length + b.length === wanted.size) pairs.push([charts[i], charts[j]]);
+    }
+  }
+  return pairs.length === 1 ? pairs[0] : null;
 }
 
 /** Turn a variant slug into words a product category might contain. */

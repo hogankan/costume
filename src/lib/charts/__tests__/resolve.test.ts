@@ -170,3 +170,43 @@ describe("resolveChart", () => {
     expect(result.confidence).toBe("unmatched");
   });
 });
+
+describe("costumes whose sizes span two charts", () => {
+  // A Wish Come True prints child and adult girls' sizes as separate charts.
+  const child: ChartCandidate = {
+    id: "aw-child",
+    variant: "girls-child",
+    sizeCodes: ["2T", "XXSC", "XSC", "SC", "ISC", "MC", "IMC", "LC", "XLC", "XXLC"],
+  };
+  const adult: ChartCandidate = {
+    id: "aw-adult",
+    variant: "girls-adult",
+    sizeCodes: ["SA", "MA", "LA", "XLA", "XXLA", "3XLA", "4XLA"],
+  };
+  const boys: ChartCandidate = {
+    id: "aw-boys",
+    variant: "boys",
+    sizeCodes: ["2T", "XXSC", "XSC", "SC", "MC", "LC", "SA", "MA", "LA", "XLA", "XXLA"],
+  };
+  // Style 24182 Jackson, as its product page lists it.
+  const jackson = ["SC", "ISC", "MC", "IMC", "LC", "XLC", "XXLC", "SA", "MA", "LA", "XLA", "XXLA", "3XLA", "4XLA"];
+
+  it("uses both charts when together they cover every size", () => {
+    const res = resolveChart(jackson, [adult, boys, child]);
+    expect(res.chart).toBeNull();
+    expect(res.combined?.map((c) => c.id).sort()).toEqual(["aw-adult", "aw-child"]);
+    expect(res.reason).toMatch(/two charts/);
+  });
+
+  it("still prefers a single chart that covers everything", () => {
+    const res = resolveChart(["SC", "MC", "SA"], [adult, boys, child]);
+    expect(res.chart?.id).toBe("aw-boys");
+    expect(res.combined).toBeUndefined();
+  });
+
+  it("does not pair charts that both claim the same size", () => {
+    const res = resolveChart(["SC", "SA", "3XLA"], [boys, adult]);
+    expect(res.combined).toBeUndefined();
+    expect(res.confidence).toBe("unmatched");
+  });
+});

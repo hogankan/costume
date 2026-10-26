@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  combineCharts,
   confirmedCharts,
   findChart,
   loadLibrary,
@@ -106,5 +107,45 @@ describe("chart library", () => {
     writeFileSync(join(root, "broken", "bad.json"), "{ not json");
 
     expect(loadLibrary(root).map((c) => c.id)).toEqual(["revolution/child-and-adult"]);
+  });
+});
+
+describe("combineCharts", () => {
+  const adult = (over: Partial<StoredChart> = {}) =>
+    stored({
+      variant: "adult",
+      chart: {
+        variant: "adult",
+        unit: "in",
+        primaryMeasurement: "girth",
+        notes: [],
+        rows: [
+          { code: "SA", label: null, ordinal: 0, girth: r(54, 57), bust: null, waist: null, hips: null, inseam: null, height: null },
+          { code: "MA", label: null, ordinal: 1, girth: r(57, 60), bust: null, waist: null, hips: null, inseam: null, height: null },
+        ],
+      },
+      ...over,
+    });
+
+  it("pools the rows of a child and an adult chart, child first", () => {
+    write("awish", "adult", adult());
+    write("awish", "child", stored({ variant: "child" }));
+    const lib = loadLibrary(root);
+    const combined = combineCharts([findChart(lib, "awish/adult")!, findChart(lib, "awish/child")!]);
+    expect(combined.rows.map((x) => x.code)).toEqual(["SC", "IC", "ICL", "SA", "MA"]);
+    expect(combined.rows.map((x) => x.ordinal)).toEqual([0, 1, 2, 3, 4]);
+    expect(combined.status).toBe("confirmed");
+  });
+
+  it("is only confirmed when every chart in it is", () => {
+    write("awish", "adult", adult({ status: "draft" }));
+    write("awish", "child", stored({ variant: "child" }));
+    expect(combineCharts(loadLibrary(root)).status).toBe("draft");
+  });
+
+  it("refuses two charts that give the same size different measurements", () => {
+    write("awish", "a", stored({ variant: "a" }));
+    write("awish", "b", stored({ variant: "b" }));
+    expect(() => combineCharts(loadLibrary(root))).toThrow(/appears on both/);
   });
 });

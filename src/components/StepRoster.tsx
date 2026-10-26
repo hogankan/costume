@@ -53,7 +53,7 @@ export function StepRoster({
     <div className="space-y-5">
       <Card
         title="1. Upload the class roster"
-        subtitle="Whatever spreadsheet you already keep — .xlsx or .csv. Everyone on this sheet gets the same costume."
+        subtitle="Whatever you already keep — .xlsx, .csv, or a PDF saved from a spreadsheet. A workbook with a tab per class (costume written on each tab) sizes every class at once."
       >
         <div
           onDragOver={(e) => {
@@ -84,7 +84,7 @@ export function StepRoster({
           <input
             ref={fileInput}
             type="file"
-            accept=".xlsx,.xls,.csv"
+            accept=".xlsx,.xls,.csv,.pdf"
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];
