@@ -46,8 +46,8 @@ describe("extractProductLite", () => {
   it("brace-matches past braces inside strings", () => {
     // The real object embeds an HTML description containing braces and quotes;
     // a regex that stops at the first '}' truncates it.
-    const tricky = `var jsonProductLite = {"Name":"a } \\" { b","Style":"1"}; more junk`;
-    expect(extractProductLite(tricky)).toEqual({ Name: 'a } " { b', Style: "1" });
+    const tricky = `var jsonProductLite = {"Name":"a } \\" { b","Style":"1","Sizes":[]}; more junk`;
+    expect(extractProductLite(tricky)).toEqual({ Name: 'a } " { b', Style: "1", Sizes: [] });
   });
 
   it("returns null rather than throwing on malformed data", () => {
@@ -67,5 +67,28 @@ describe("weissman style numbers and urls", () => {
     ["https://www.weissmans.com/showtime/costumes/tap_and_jazz/19912.aspx", "19912"],
   ])("parses %s", (input, expected) => {
     expect(weissmanAdapter.parseStyleNumber(input)).toBe(expected);
+  });
+});
+
+describe("weissman pages after the November 2026 change", () => {
+  // Weissman renamed the embedded object from `jsonProductLite` to `product`.
+  const URL_15431 = "https://www.weissmans.com/elite/costumes/acro/15431.aspx";
+  const page = readFileSync(join(__dirname, "..", "__fixtures__", "weissman-15431.html"), "utf8");
+  const result = weissmanAdapter.parse(page, URL_15431);
+
+  it("reads the costume from the renamed product object", () => {
+    expect(result.styleNumber).toBe("15431");
+    expect(result.name).toBe("Crisscross Mesh Maxi Dress");
+    expect(result.availableSizes).toEqual(["MC", "LC", "XSA", "SA", "MA", "LA", "XLA", "XXLA"]);
+    expect(result.colorways).toContainEqual({ name: "Red", code: "CRED" });
+    expect(result.chartImageUrl).toBe("~/SizeCharts/BaleraWeissman.ascx");
+  });
+
+  it("skips other script objects that are not the product", () => {
+    const decoys =
+      'var settings = {"open": false}; var cart = {"Style": 3}; ' +
+      'var item = {"Style":"20001","Name":"Test","Sizes":[{"Size":"SC"}]};';
+    expect(extractProductLite(decoys)?.Style).toBe("20001");
+    expect(extractProductLite("var settings = {\"open\": false};")).toBeNull();
   });
 });

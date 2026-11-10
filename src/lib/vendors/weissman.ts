@@ -10,9 +10,14 @@ import {
  * Weissman (weissmans.com).
  *
  * Their catalogue listing is rendered client-side, which made this look like the
- * hardest vendor. The product pages are not: each one embeds a `jsonProductLite`
- * object with the style number, name, orderable sizes, colours and - usefully -
- * the size chart the product uses. Plain fetch, no browser.
+ * hardest vendor. The product pages are not: each one embeds a product object
+ * with the style number, name, orderable sizes, colours and - usefully - the
+ * size chart the product uses. Plain fetch, no browser.
+ *
+ * The object's variable name is not stable: it was `var jsonProductLite = {...}`
+ * until November 2026, when it became `var product = {...}` with the same fields.
+ * So the page is searched for whichever object carries a style and sizes,
+ * rather than for one particular name.
  *
  * A bare style number also resolves: `weissmans.com/19912.aspx` serves the same
  * page as the long categorised URL, so no catalogue crawl is needed to look a
@@ -41,17 +46,33 @@ interface WeissmanProductLite {
 /**
  * Pull the embedded product object out of the page.
  *
+ * Every `var <name> = {` is tried in turn, and the first object that parses and
+ * has a style number and a size list wins. That covers both names Weissman has
+ * used and survives the next rename.
+ */
+export function extractProductLite(html: string): WeissmanProductLite | null {
+  const candidates = /var\s+[A-Za-z_$][\w$]*\s*=\s*\{/g;
+  for (let m = candidates.exec(html); m; m = candidates.exec(html)) {
+    const json = objectAt(html, m.index + m[0].length - 1);
+    if (!json) continue;
+    try {
+      const parsed = JSON.parse(json) as WeissmanProductLite;
+      if (typeof parsed?.Style === "string" && Array.isArray(parsed.Sizes)) return parsed;
+    } catch {
+      // Not JSON (ordinary script), keep looking.
+    }
+  }
+  return null;
+}
+
+/**
+ * The text of the `{...}` object starting at `start`.
+ *
  * Brace-matched rather than regex-captured: the JSON contains the product
  * description as HTML, so any pattern that stops at the first `}` or `</script>`
  * truncates it.
  */
-export function extractProductLite(html: string): WeissmanProductLite | null {
-  const marker = html.indexOf("var jsonProductLite");
-  if (marker < 0) return null;
-
-  const start = html.indexOf("{", marker);
-  if (start < 0) return null;
-
+function objectAt(html: string, start: number): string | null {
   let depth = 0;
   let inString = false;
   let escaped = false;
@@ -76,13 +97,7 @@ export function extractProductLite(html: string): WeissmanProductLite | null {
     if (ch === "{") depth++;
     else if (ch === "}") {
       depth--;
-      if (depth === 0) {
-        try {
-          return JSON.parse(html.slice(start, i + 1)) as WeissmanProductLite;
-        } catch {
-          return null;
-        }
-      }
+      if (depth === 0) return html.slice(start, i + 1);
     }
   }
   return null;
