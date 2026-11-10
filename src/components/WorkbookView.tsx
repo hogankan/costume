@@ -243,6 +243,8 @@ export function WorkbookView({
   const [overrides, setOverrides] = useState<Overrides>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** The class whose card is showing; one class at a time keeps the page readable. */
+  const [selected, setSelected] = useState<string>(() => classes[0]?.key ?? "");
 
   const otherTabs = roster.classes.filter((c) => c.kind === "other").map((c) => c.sheetName);
 
@@ -456,11 +458,12 @@ export function WorkbookView({
    * Open the report as its own page and print it. The page is built here, in
    * the click, so the browser treats the new tab as something the user asked for.
    */
-  function printReport(only: ClassState) {
+  function printReport(only?: ClassState) {
     const reports = reportsFor(only);
     if (reports.length === 0) return;
+    const title = only ? only.cls.className : `${roster.fileName} - fit report`;
     const url = URL.createObjectURL(
-      new Blob([fitReportHtml(reports, only.cls.className)], { type: "text/html" }),
+      new Blob([fitReportHtml(reports, title)], { type: "text/html" }),
     );
     const win = window.open(url, "_blank");
     if (!win) setError("Your browser blocked the print window. Allow pop-ups for this page and try again.");
@@ -490,6 +493,14 @@ export function WorkbookView({
   const sizedClasses = classes.filter((c) => results[c.key] && !results[c.key].error);
   const waiting = classes.filter((c) => !sizedClasses.includes(c));
   const anyEdits = classes.some((c) => c.cls.dancers.some((d) => d.source));
+  const current = classes.find((c) => c.key === selected) ?? classes[0];
+
+  /** Green once sized, amber when it needs something from you, grey otherwise. */
+  const dotFor = (c: ClassState) => {
+    const r = results[c.key];
+    if (r && !r.error) return "bg-emerald-500";
+    return classStatus(c).tone === "warn" || r?.error ? "bg-amber-500" : "bg-neutral-300 dark:bg-neutral-600";
+  };
 
   return (
     <div className="space-y-5">
@@ -518,7 +529,14 @@ export function WorkbookView({
             <ul className="mt-1 space-y-0.5">
               {waiting.map((c) => (
                 <li key={c.key}>
-                  <span className="font-medium">{c.cls.sheetName}</span> — {classStatus(c).label}
+                  <button
+                    type="button"
+                    className="font-medium underline"
+                    onClick={() => setSelected(c.key)}
+                  >
+                    {c.cls.sheetName}
+                  </button>{" "}
+                  — {classStatus(c).label}
                 </li>
               ))}
             </ul>
@@ -536,6 +554,13 @@ export function WorkbookView({
           >
             Download fit report (all classes)
           </Button>
+          <Button
+            variant="secondary"
+            onClick={() => printReport()}
+            disabled={busy || allAssignments.length === 0}
+          >
+            Print all classes
+          </Button>
         </div>
 
         {anyEdits ? (
@@ -551,7 +576,29 @@ export function WorkbookView({
         ) : null}
       </Card>
 
-      {classes.map((c) => (
+      <nav aria-label="Classes" className="flex flex-wrap gap-2">
+        {classes.map((c) => {
+          const active = c.key === current?.key;
+          return (
+            <button
+              key={c.key}
+              type="button"
+              onClick={() => setSelected(c.key)}
+              aria-current={active ? "page" : undefined}
+              className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
+                active
+                  ? "border-neutral-900 bg-neutral-900 text-white dark:border-white dark:bg-white dark:text-neutral-900"
+                  : "border-black/15 bg-white hover:bg-neutral-50 dark:border-white/20 dark:bg-neutral-900 dark:hover:bg-neutral-800"
+              }`}
+            >
+              <span className={`inline-block h-2 w-2 rounded-full ${dotFor(c)}`} />
+              {c.cls.sheetName}
+            </button>
+          );
+        })}
+      </nav>
+
+      {classes.filter((c) => c.key === current?.key).map((c) => (
         <ClassCard
           key={c.key}
           state={c}
