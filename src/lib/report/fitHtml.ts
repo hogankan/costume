@@ -41,7 +41,9 @@ function classSection(report: FitReport): string {
       const first = i === 0 || report.rows[i - 1].rowNumber !== r.rowNumber;
       const size = r.notSized
         ? `<em class="muted">not sized</em>`
-        : `<b>${esc(r.size)}</b>${r.recommendedSize !== r.size ? `<div class="small">was ${esc(r.recommendedSize)}</div>` : ""}`;
+        : `<b>${esc(r.size)}</b>${r.recommendedSize !== r.size ? `<div class="small">was ${esc(r.recommendedSize)}</div>` : ""}${
+            r.girthSize ? `<div class="small">girth says ${esc(r.girthSize)}</div>` : ""
+          }`;
       const cells = r.cells
         .map((c) => {
           const bg = r.notSized ? "transparent" : COLOURS[c.tone];

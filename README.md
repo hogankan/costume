@@ -28,6 +28,15 @@ that already satisfy girth*, which happens on charts carrying long variants
 (IC vs ICL) where several rows legitimately contain the same girth. Girth still
 gates the candidate set.
 
+**One deliberate exception: girth only just over a smaller size.** Moving up by
+girth can leave everything else badly out of proportion — typically child XXLC
+to adult SA. When girth is **no more than 1"** over the next size down, at least
+two of chest/waist/hips are measured, most of them fit that smaller size, and at
+least two are more than 2" under the bigger size, the smaller size is
+recommended with a warning to check torso fit (`GIRTH_STEP_DOWN`). The report
+shows what girth alone picked ("girth says SA"). Never applies past the largest
+size; `girthStepDownTolerance: 0` turns it off.
+
 ## Ordering shape
 
 The **class is the ordering unit**, not the dancer. A studio uploads a class
@@ -136,15 +145,33 @@ PDFs are read from their text, so a PDF saved from Excel or Sheets works; a
 scanned or photographed sheet is refused with a message rather than guessed at.
 Regenerate the sample with `npx tsx scripts/make-sample-workbook.ts`.
 
-Nothing is saved on the server; the database is not used yet.
+Without signing in nothing is saved. Signed-in users can **Save as show**: the
+show keeps its classes, and every change after that saves automatically. Saved
+shows are under **My shows**; reopening one restores everything as it was left
+(no re-upload, no vendor lookups), and each class has a **History** of
+overrides (recommended size, chosen size, who, when, why) and of dancers
+added or edited since the upload. All accounts share the same shows.
+
+### Accounts
+
+There is no public sign-up. Accounts are created, or passwords reset, with:
+
+```bash
+npm run user:create -- --email you@example.com --name "Your Name" --role admin
+npm run user:create -- --email someone@example.com --name "Someone" --generate
+```
+
+Without `--generate` it asks for the password (not shown as you type); with it,
+a strong password is generated and printed once. It writes to whichever
+database `DATABASE_URL` points at.
 
 ## Setup
 
 ```bash
 npm install
-cp .env.example .env      # set DATABASE_URL and ANTHROPIC_API_KEY
+cp .env.example .env      # DATABASE_URL = the TEST database, never the live one
 npm run db:generate
-npm run db:migrate        # needs a reachable Postgres
+npm run db:migrate        # applies prisma/migrations to that database
 ```
 
 ## Commands
@@ -279,10 +306,12 @@ CSV or PDF; every class with a costume is sized; pieces, boys' costumes and
 missing dancers can be added on screen; individual sizes can be overridden with
 a recorded reason; download the order sheet and fit reports.
 
-**Not yet built:** persistence (nothing is saved between sessions — the Prisma
-schema exists but no migration has been run), login, and the declarative
-per-vendor rules overlay (e.g. Revolution's note that XLC and XXLC fit a larger
-child rather than a petite adult).
+**Not yet built:** the declarative per-vendor rules overlay (e.g. Revolution's
+note that XLC and XXLC fit a larger child rather than a petite adult).
+
+**Databases:** two Postgres services on Railway — `Postgres` for the live app
+(private), and `Postgres-welb` for testing on a computer (public). The live app
+applies migrations on start (`prisma migrate deploy`).
 
 **Not yet verified live:** chart extraction has never been run against the API —
 it needs `ANTHROPIC_API_KEY`.

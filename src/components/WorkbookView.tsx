@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import type { ClassSheet } from "@/lib/import/workbook";
 import type { ImportedDancer } from "@/lib/import/parse";
 import type { LookupResult } from "@/lib/costume/lookup";
@@ -20,6 +21,8 @@ import { Alert, Button, Card, SeverityBadge, inputClass } from "./ui";
 import { COMPANIES, type ChartInfo, type RosterResponse } from "./types";
 import { FitReportTable } from "./FitReportTable";
 import { DancerFormPanel } from "./DancerForm";
+import { HistoryPanel } from "./HistoryPanel";
+import type { OverrideEventInput, SavedClassPayload, SavedShow } from "@/lib/shows/types";
 
 /**
  * Size a whole costume workbook: one card per class, with the costume read from
@@ -225,22 +228,131 @@ function reportFor(c: ClassState, result: ClassSizeResult, overrides: Overrides)
   });
 }
 
+/** Rebuild the screen from a saved show, exactly as it was left. */
+function restoreState(saved: SavedShow): {
+  classes: ClassState[];
+  results: Record<string, ClassSizeResult>;
+  overrides: Overrides;
+} {
+  const classes = saved.classes.map((sc) => ({
+    key: sc.sheetName,
+    cls: { ...sc.original, dancers: sc.state.dancers },
+    // Fresh piece ids, so pieces added after reopening can never collide.
+    groups: (sc.state.groups as Group[]).map((g) => ({
+      ...g,
+      pieces: g.pieces.map((p) => ({
+        ...p,
+        id: `p${++nextPieceId}`,
+        status: p.status === "loading" ? ("idle" as const) : p.status,
+      })),
+    })),
+    alternateRows: sc.state.alternateRows ?? [],
+  }));
+  const results: Record<string, ClassSizeResult> = {};
+  const overrides: Overrides = {};
+  for (const sc of saved.classes) {
+    if (sc.results) results[sc.sheetName] = { ...sc.results, key: sc.sheetName };
+    for (const [k, v] of Object.entries(sc.overrides ?? {})) overrides[`${sc.sheetName}|${k}`] = v;
+  }
+  return { classes, results, overrides };
+}
+
+/** Split an override key back into class, dancer row and costume style. */
+function parseOverrideKey(key: string): { classKey: string; rowNumber: number; styleNumber: string } {
+  const parts = key.split("|");
+  const styleNumber = parts.pop() ?? "";
+  const rowNumber = Number(parts.pop());
+  return { classKey: parts.join("|"), rowNumber, styleNumber };
+}
+
+/** Override changes since the last save, as history entries. */
+function overrideEvents(
+  before: Overrides,
+  after: Overrides,
+  results: Record<string, ClassSizeResult>,
+): OverrideEventInput[] {
+  const events: OverrideEventInput[] = [];
+  for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
+    const was = before[key];
+    const now = after[key];
+    if (!was?.size && !now?.size) continue;
+    if (was?.size === now?.size && (was?.reason ?? "") === (now?.reason ?? "")) continue;
+    const { classKey, rowNumber, styleNumber } = parseOverrideKey(key);
+    const a = results[classKey]?.assignments.find(
+      (x) => x.rowNumber === rowNumber && x.styleNumber === styleNumber,
+    );
+    if (!a) continue;
+    events.push({
+      sheetName: classKey,
+      rowNumber,
+      dancerName: a.dancerName,
+      styleNumber,
+      recommendedSize: a.recommendedSize,
+      toSize: now?.size || null,
+      reason: now?.size ? now.reason || null : null,
+    });
+  }
+  return events;
+}
+
+type SaveStatus =
+  | { kind: "idle" }
+  | { kind: "saving" }
+  | { kind: "saved"; at: Date }
+  | { kind: "error"; message: string };
+
 export function WorkbookView({
   roster,
   charts,
   onStartOver,
+  signedIn = false,
+  saved,
 }: {
   roster: RosterResponse;
   charts: ChartInfo[];
   onStartOver: () => void;
+  /** Signed-in users can save the upload as a show. */
+  signedIn?: boolean;
+  /** A saved show being reopened. */
+  saved?: SavedShow;
 }) {
-  const [classes, setClasses] = useState<ClassState[]>(() => initialState(roster.classes));
-  const [results, setResults] = useState<Record<string, ClassSizeResult>>({});
+  const [restored] = useState(() => (saved ? restoreState(saved) : null));
+  const [classes, setClasses] = useState<ClassState[]>(
+    () => restored?.classes ?? initialState(roster.classes),
+  );
+  const [results, setResults] = useState<Record<string, ClassSizeResult>>(
+    () => restored?.results ?? {},
+  );
   /** What each class looked like when it was sized, to spot out-of-date results. */
-  const [sizedAs, setSizedAs] = useState<Record<string, string>>({});
+  const [sizedAs, setSizedAs] = useState<Record<string, string>>(() =>
+    restored
+      ? Object.fromEntries(
+          restored.classes.filter((c) => restored.results[c.key]).map((c) => [c.key, signature(c)]),
+        )
+      : {},
+  );
   /** Classes to size as soon as their costume lookups finish. */
   const [pending, setPending] = useState<string[]>([]);
-  const [overrides, setOverrides] = useState<Overrides>({});
+  const [overrides, setOverrides] = useState<Overrides>(() => restored?.overrides ?? {});
+
+  // Saving. A show is created once ("Save as show"); after that every change
+  // is saved automatically, and override changes are kept as history.
+  const [showId, setShowId] = useState<string | null>(saved?.id ?? null);
+  const [showName, setShowName] = useState(
+    saved?.name ?? roster.fileName.replace(/\.[^.]+$/, ""),
+  );
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>({ kind: "idle" });
+  /** The class exactly as uploaded, kept so edits can be compared with the sheet. */
+  const originals = useRef<Record<string, ClassSheet>>(
+    Object.fromEntries(
+      saved
+        ? saved.classes.map((c) => [c.sheetName, c.original])
+        : roster.classes.filter((c) => c.kind === "class").map((c) => [c.sheetName, c]),
+    ),
+  );
+  /** What was last sent for each class, so only changed classes are saved. */
+  const lastSaved = useRef<Record<string, string>>({});
+  const lastOverrides = useRef<Overrides>(restored?.overrides ?? {});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** The class whose card is showing; one class at a time keeps the page readable. */
@@ -270,8 +382,9 @@ export function WorkbookView({
       .flatMap(allPieces)
       .filter((p) => p.input.trim() && p.status === "idle")
       .map((p) => ({ companySlug: p.companySlug, style: p.input.trim() }));
+    const unsized = classes.filter((c) => !results[c.key]).map((c) => c.key);
     if (items.length === 0) {
-      setPending(classes.map((c) => c.key));
+      setPending(unsized);
       return;
     }
 
@@ -298,7 +411,7 @@ export function WorkbookView({
           })),
         ),
       )
-      .then(() => setPending(classes.map((c) => c.key)))
+      .then(() => setPending(unsized))
       .catch((err) => setError(err instanceof Error ? err.message : String(err)));
     // Runs once per upload; later lookups are triggered per piece.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -387,6 +500,80 @@ export function WorkbookView({
     setPending((prev) => prev.filter((k) => !settled.some((c) => c.key === k)));
     sizeClasses(settled.filter((c) => classStatus(c).tone === "ok"));
   }, [pending, classes, busy]);
+
+  const payloadFor = (c: ClassState, position: number): SavedClassPayload => {
+    const own: Record<string, { size: string; reason: string }> = {};
+    for (const [k, v] of Object.entries(overrides)) {
+      const { classKey, rowNumber, styleNumber } = parseOverrideKey(k);
+      if (classKey === c.key && v.size) own[`${rowNumber}|${styleNumber}`] = v;
+    }
+    return {
+      sheetName: c.key,
+      className: c.cls.className,
+      position,
+      original: originals.current[c.key] ?? c.cls,
+      state: { dancers: c.cls.dancers, groups: c.groups, alternateRows: c.alternateRows },
+      results: results[c.key] ?? null,
+      overrides: own,
+    };
+  };
+
+  async function saveAsShow() {
+    setSaveStatus({ kind: "saving" });
+    try {
+      const payload = classes.map(payloadFor);
+      const res = await fetch("/api/shows", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: showName,
+          sourceFileName: roster.fileName,
+          sourceFileKind: roster.fileKind,
+          classes: payload,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      for (const p of payload) lastSaved.current[p.sheetName] = JSON.stringify(p);
+      // Overrides made before saving are recorded as history by the next save.
+      lastOverrides.current = {};
+      setShowId(data.id);
+      setSaveStatus({ kind: "saved", at: new Date() });
+      window.history.replaceState(null, "", `/shows/${data.id}`);
+    } catch (err) {
+      setSaveStatus({ kind: "error", message: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  // Once saved, save every change a couple of seconds after it settles.
+  useEffect(() => {
+    if (!showId) return;
+    const timer = setTimeout(async () => {
+      const changed = classes
+        .map(payloadFor)
+        .filter((p) => JSON.stringify(p) !== lastSaved.current[p.sheetName]);
+      const events = overrideEvents(lastOverrides.current, overrides, results);
+      if (changed.length === 0 && events.length === 0) return;
+      setSaveStatus({ kind: "saving" });
+      try {
+        const res = await fetch(`/api/shows/${showId}/save`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ classes: changed, overrideEvents: events }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        for (const p of changed) lastSaved.current[p.sheetName] = JSON.stringify(p);
+        lastOverrides.current = overrides;
+        setSaveStatus({ kind: "saved", at: new Date() });
+      } catch (err) {
+        setSaveStatus({ kind: "error", message: err instanceof Error ? err.message : String(err) });
+      }
+    }, 2000);
+    return () => clearTimeout(timer);
+    // payloadFor reads the same state listed here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showId, classes, results, overrides]);
 
   /** Save a dancer typed into the app, then re-size their class. */
   function saveDancer(key: string, dancer: ImportedDancer) {
@@ -563,12 +750,64 @@ export function WorkbookView({
           </Button>
         </div>
 
-        {anyEdits ? (
-          <p className="mt-3 text-sm text-violet-800 dark:text-violet-200">
-            Dancers added or edited here stay until you close or refresh this page — update your
-            spreadsheet too.
-          </p>
-        ) : null}
+        <div className="mt-4 border-t border-black/10 pt-4 text-sm dark:border-white/10">
+          {showId ? (
+            <p>
+              Saved as show <span className="font-medium">{showName}</span>
+              {" · "}
+              {saveStatus.kind === "saving" ? (
+                <span className="text-neutral-500">Saving…</span>
+              ) : saveStatus.kind === "error" ? (
+                <span className="text-red-700 dark:text-red-300">
+                  Not saved: {saveStatus.message}
+                </span>
+              ) : saveStatus.kind === "saved" ? (
+                <span className="text-emerald-700 dark:text-emerald-300">
+                  Saved ✓ {saveStatus.at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                </span>
+              ) : (
+                <span className="text-neutral-500">Changes save automatically.</span>
+              )}
+              {" · "}
+              <Link href="/shows" className="underline">
+                My shows
+              </Link>
+            </p>
+          ) : signedIn ? (
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="min-w-64 flex-1">
+                <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">
+                  Show name
+                </span>
+                <input
+                  className={inputClass}
+                  value={showName}
+                  onChange={(e) => setShowName(e.target.value)}
+                  placeholder="e.g. Christmas 2026"
+                />
+              </label>
+              <Button
+                variant="secondary"
+                onClick={saveAsShow}
+                disabled={!showName.trim() || saveStatus.kind === "saving"}
+              >
+                {saveStatus.kind === "saving" ? "Saving…" : "Save as show"}
+              </Button>
+              {saveStatus.kind === "error" ? (
+                <span className="w-full text-red-700 dark:text-red-300">{saveStatus.message}</span>
+              ) : null}
+            </div>
+          ) : (
+            <p className="text-neutral-600 dark:text-neutral-400">
+              Nothing here is saved.{" "}
+              <Link href="/login" className="underline">
+                Sign in
+              </Link>{" "}
+              to save it as a show.
+              {anyEdits ? " Dancers added or edited here are lost when you close the page." : ""}
+            </p>
+          )}
+        </div>
         {error ? (
           <div className="mt-4">
             <Alert kind="error">{error}</Alert>
@@ -616,6 +855,9 @@ export function WorkbookView({
           onPrint={() => printReport(c)}
           onDownload={() => downloadReport(c)}
           onSaveDancer={(d) => saveDancer(c.key, d)}
+          historyUrl={
+            showId ? `/api/shows/${showId}/history?sheet=${encodeURIComponent(c.key)}` : undefined
+          }
           onOverride={(k, size, reason) =>
             setOverrides((prev) => {
               const next = { ...prev };
@@ -647,7 +889,9 @@ function ClassCard({
   onDownload,
   onSaveDancer,
   onOverride,
+  historyUrl,
 }: {
+  historyUrl?: string;
   state: ClassState;
   charts: ChartInfo[];
   result?: ClassSizeResult;
@@ -920,6 +1164,8 @@ function ClassCard({
           </span>
         </div>
       ) : null}
+
+      {historyUrl ? <HistoryPanel url={historyUrl} /> : null}
 
       {result ? (
         <ClassResults
@@ -1224,6 +1470,11 @@ function ClassResults({
                       </span>
                       {override?.size ? (
                         <span className="ml-2 font-mono font-semibold">{override.size}</span>
+                      ) : null}
+                      {a.girthSize ? (
+                        <span className="block text-xs text-amber-700 dark:text-amber-300">
+                          girth says {a.girthSize}
+                        </span>
                       ) : null}
                     </td>
                     <td className="py-2 pr-3">

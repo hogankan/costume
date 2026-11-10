@@ -75,6 +75,8 @@ export interface FitRow {
   /** Size being ordered: an override wins over the recommendation. */
   size?: string;
   recommendedSize?: string;
+  /** What girth alone picked, when the recommendation stepped down from it. */
+  girthSize?: string;
   overrideReason?: string;
   cells: FitCell[];
   /** What a person should look at for this dancer. Empty means it all lines up. */
@@ -193,6 +195,7 @@ export function buildFitReport(input: FitReportInput): FitReport {
         costumeName: a.costumeName,
         size,
         recommendedSize: a.recommendedSize,
+        girthSize: a.girthSize,
         overrideReason: override?.reason,
         cells,
         alerts: [...new Set(alerts)],

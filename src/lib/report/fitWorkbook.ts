@@ -135,7 +135,15 @@ function addClassSheet(wb: ExcelJS.Workbook, report: FitReport, name: string) {
       first ? (r.source === "added" ? "added" : r.rowNumber) : "",
       first ? `${r.name}${r.source ? ` (${SOURCE_LABEL[r.source]})` : ""}` : "",
       ...(multiStyle ? [r.styleNumber ? `${r.styleNumber} ${r.costumeName ?? ""}`.trim() : ""] : []),
-      r.notSized ? "not sized" : r.recommendedSize !== r.size ? `${r.size} (was ${r.recommendedSize})` : r.size,
+      r.notSized
+        ? "not sized"
+        : [
+            r.size,
+            r.recommendedSize !== r.size ? `(was ${r.recommendedSize})` : "",
+            r.girthSize ? `(girth says ${r.girthSize})` : "",
+          ]
+            .filter(Boolean)
+            .join(" "),
       ...r.cells.map(cellText),
       r.alerts.join("\n"),
     ]);

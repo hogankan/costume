@@ -9,7 +9,7 @@ import type { ChartInfo, RosterResponse } from "./types";
  * Upload a measurement sheet - a workbook with a tab per class, a single class
  * roster, a CSV, or a PDF saved from a spreadsheet - and size every class in it.
  */
-export function Wizard() {
+export function Wizard({ signedIn = false }: { signedIn?: boolean }) {
   const [roster, setRoster] = useState<RosterResponse | null>(null);
   const [uploadId, setUploadId] = useState(0);
   const [charts, setCharts] = useState<ChartInfo[]>([]);
@@ -51,20 +51,20 @@ export function Wizard() {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-5 py-8">
-      <header className="mb-7">
-        <h1 className="text-xl font-semibold tracking-tight">Costume Sizing</h1>
-        <p className="mt-1 max-w-2xl text-sm text-neutral-600 dark:text-neutral-400">
+      <div className="mb-7">
+        <p className="max-w-2xl text-sm text-neutral-600 dark:text-neutral-400">
           Upload your measurement sheet (.xlsx, .csv or PDF) and every class is sized, with the
           dancers who need a second look called out. Girth decides the size and rounds up, because
           a costume that is too short in girth cannot be worn or altered.
         </p>
-      </header>
+      </div>
 
       {roster ? (
         <WorkbookView
           key={uploadId}
           roster={roster}
           charts={charts}
+          signedIn={signedIn}
           onStartOver={() => {
             setRoster(null);
             setError(null);

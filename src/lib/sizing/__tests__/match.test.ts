@@ -429,3 +429,64 @@ describe("charts with no girth column", () => {
     expect(result.rationale).toMatch(/^Girth 45"/);
   });
 });
+
+describe("stepping down when girth only just tips a dancer into a bigger size", () => {
+  // Child XXLC to adult SA is where girth most often leaves everything else far
+  // too big: a big jump in chest, waist and hips for 1" of girth.
+  const childToAdult: SizeChart = {
+    id: "fixture-child-adult",
+    companySlug: "awishcometrue",
+    variant: "girls",
+    status: "confirmed",
+    rows: [
+      { code: "XLC", ordinal: 0, girth: { min: 52, max: 56 }, bust: { min: 32, max: 35 }, waist: { min: 30, max: 33 }, hips: { min: 34, max: 37 } },
+      { code: "XXLC", ordinal: 1, girth: { min: 56, max: 59 }, bust: { min: 35, max: 38 }, waist: { min: 33, max: 36 }, hips: { min: 37, max: 40 } },
+      { code: "SA", ordinal: 2, girth: { min: 59.5, max: 63 }, bust: { min: 40, max: 43 }, waist: { min: 38, max: 41 }, hips: { min: 42, max: 45 } },
+    ],
+  };
+  const sizes = ["XLC", "XXLC", "SA"];
+  const childish = { bust: 36, waist: 34, hips: 38 };
+
+  it.each([59.5, 60])("recommends XXLC at girth %s when chest, waist and hips all fit it", (girth) => {
+    const result = matchSize({ girth, ...childish }, childToAdult, sizes);
+    expect(result.size).toBe("XXLC");
+    expect(result.girthSize).toBe("SA");
+    const flag = result.flags.find((f) => f.code === "GIRTH_STEP_DOWN");
+    expect(flag?.severity).toBe("warning");
+    expect(flag?.message).toMatch(/Recommended XXLC rather than SA/);
+    expect(flag?.message).toMatch(/order SA if the body is tight/);
+    expect(result.rationale).toMatch(/XXLC is recommended/);
+  });
+
+  it("lets girth decide when it is more than 1\" over", () => {
+    const result = matchSize({ girth: 60.5, ...childish }, childToAdult, sizes);
+    expect(result.size).toBe("SA");
+    expect(result.girthSize).toBeUndefined();
+  });
+
+  it("needs at least two body measurements to go on", () => {
+    expect(matchSize({ girth: 60, bust: 36 }, childToAdult, sizes).size).toBe("SA");
+  });
+
+  it("does not step down when the bigger size is not out of proportion", () => {
+    // Chest, waist and hips are near SA, so SA is the right call.
+    expect(matchSize({ girth: 60, bust: 38, waist: 36, hips: 40 }, childToAdult, sizes).size).toBe("SA");
+  });
+
+  it("does not step down when most measurements do not fit the smaller size", () => {
+    expect(matchSize({ girth: 60, bust: 36, waist: 37, hips: 41 }, childToAdult, sizes).size).toBe("SA");
+  });
+
+  it("never applies past the largest size", () => {
+    const result = matchSize({ girth: 64, ...childish }, childToAdult, sizes);
+    expect(result.size).toBe("SA");
+    expect(has(result.flags, "PRIMARY_ABOVE_RANGE")).toBe(true);
+  });
+
+  it("can be turned off", () => {
+    const result = matchSize({ girth: 60, ...childish }, childToAdult, sizes, {
+      girthStepDownTolerance: 0,
+    });
+    expect(result.size).toBe("SA");
+  });
+});

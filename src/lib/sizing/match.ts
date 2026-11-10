@@ -68,13 +68,27 @@ export function matchSize(
     });
   }
 
-  const { row, reason } = selectByGirth(matchedGirth, rows, m, opts, flags, primary);
+  const selectionFlagsFrom = flags.length;
+  let { row, reason } = selectByGirth(matchedGirth, rows, m, opts, flags, primary);
+  let girthSize: string | undefined;
+
+  const step = stepDown(matchedGirth, row, reason, rows, m, opts, primary);
+  if (step) {
+    // The girth-selection notes ("rounded up to SA") no longer describe the
+    // recommendation; the step-down flag explains both sizes instead.
+    flags.splice(selectionFlagsFrom);
+    flags.push(step.flag);
+    girthSize = row.code;
+    row = step.row;
+    reason = "stepped-down";
+  }
 
   addBorderFlags(matchedGirth, row, opts.borderThreshold, flags, primary);
   addAdvisoryFlags(m, row, flags, advisoryKeys, primary, opts.alterationThreshold);
 
   return {
     size: row.code,
+    ...(girthSize ? { girthSize } : {}),
     ordinal: row.ordinal,
     matchedGirth,
     rawGirth,
@@ -97,7 +111,8 @@ type SelectReason =
   | "below-smallest"
   | "above-largest"
   | "boundary"
-  | "ambiguous";
+  | "ambiguous"
+  | "stepped-down";
 
 /**
  * Orderable rows, ordered by girth rather than by printed position.
@@ -415,6 +430,85 @@ function inseamFlag(value: number, garment: number, code: string): Flag | null {
   return null;
 }
 
+/** The measurements that decide whether a step down makes sense. */
+const BODY_KEYS: MeasurementKey[] = ["bust", "waist", "hips"];
+const BODY_LABEL: Record<string, string> = { bust: "chest", waist: "waist", hips: "hips" };
+
+/**
+ * Should a dancer whose girth only just tips them into a bigger size be put in
+ * the smaller one instead? Yes when all of these hold:
+ *
+ *  - girth is no more than `girthStepDownTolerance` (default 1") over the next
+ *    orderable size down;
+ *  - at least two of chest/waist/hips are measured, and most of them fit that
+ *    smaller size;
+ *  - at least two of them are more than the alteration threshold under the
+ *    bigger size - so the bigger size really would be out of proportion.
+ *
+ * Never when girth is past the largest size, and only on charts that size on
+ * girth. The flag says plainly that girth is tight in the smaller size.
+ */
+function stepDown(
+  girth: number,
+  chosen: SizeRow,
+  reason: SelectReason,
+  rows: SizeRow[],
+  m: Measurements,
+  opts: Required<SizingOptions>,
+  primary: MeasurementKey,
+): { row: SizeRow; flag: Flag } | null {
+  const tolerance = opts.girthStepDownTolerance;
+  if (!(tolerance > 0) || primary !== "girth" || reason === "above-largest") return null;
+
+  const band = (r: SizeRow) => r.girth ?? { min: null, max: null };
+  const smaller = rows
+    .filter((r) => lo(band(r)) < lo(band(chosen)) && Number.isFinite(hi(band(r))))
+    .sort((a, b) => hi(band(b)) - hi(band(a)) || b.ordinal - a.ordinal)[0];
+  if (!smaller) return null;
+
+  const over = girth - hi(band(smaller));
+  if (over > tolerance) return null;
+
+  const measured = BODY_KEYS.filter(
+    (k) => typeof m[k] === "number" && smaller[k] && chosen[k],
+  );
+  if (measured.length < 2) return null;
+  const fitSmaller = measured.filter((k) => contains(smaller[k]!, m[k] as number));
+  const wellUnder = measured.filter(
+    (k) => (m[k] as number) < lo(chosen[k]!) - opts.alterationThreshold,
+  );
+  if (fitSmaller.length < 2 || fitSmaller.length * 2 <= measured.length) return null;
+  if (wellUnder.length < 2) return null;
+
+  const under = wellUnder.map((k) => lo(chosen[k]!) - (m[k] as number));
+  const spread =
+    Math.min(...under) === Math.max(...under)
+      ? `${fmt(under[0])}"`
+      : `${fmt(Math.min(...under))}-${fmt(Math.max(...under))}"`;
+  const names = (keys: MeasurementKey[]) => {
+    const words = keys.map((k) => BODY_LABEL[k]);
+    return words.length > 1 ? `${words.slice(0, -1).join(", ")} and ${words.at(-1)}` : words[0];
+  };
+  const girthNote =
+    over > 0
+      ? `girth ${fmt(girth)}" is only ${fmt(over)}" over ${smaller.code} (${formatRange(band(smaller))})`
+      : `girth ${fmt(girth)}" is at the top of ${smaller.code} (${formatRange(band(smaller))})`;
+
+  return {
+    row: smaller,
+    flag: {
+      code: "GIRTH_STEP_DOWN",
+      severity: "warning",
+      message: `Recommended ${smaller.code} rather than ${chosen.code}: ${girthNote} and ${names(fitSmaller)} fit ${smaller.code} - ${names(wellUnder)} are ${spread} under ${chosen.code}. Check torso fit before ordering; order ${chosen.code} if the body is tight.`,
+      measure: "girth",
+      value: girth,
+      range: band(smaller),
+      direction: over > 0 ? "over" : undefined,
+      delta: over > 0 ? over : undefined,
+    },
+  };
+}
+
 function buildRationale(
   girth: number,
   rawGirth: number,
@@ -439,6 +533,7 @@ function buildRationale(
     "above-largest": `${girthPhrase} exceeds the largest orderable size ${label} ${formatRange(band)}.`,
     boundary: `${girthPhrase} sits on a shared size boundary; took ${label} ${formatRange(band)}.`,
     ambiguous: `${girthPhrase} fits more than one size; ${label} ${formatRange(band)} fits the remaining measurements best.`,
+    "stepped-down": `${girthPhrase} is only just over ${label} ${formatRange(band)}, and chest, waist and hips fit ${row.code}, so ${row.code} is recommended over the next size up.`,
   };
 
   // Only real deviations from a range; the garment-spec notes have no direction

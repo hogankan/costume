@@ -99,6 +99,11 @@ export type FlagCode =
   | "GROWTH_ALLOWANCE_APPLIED"
   /** An advisory measurement was absent from the sheet. */
   | "MISSING_MEASUREMENT"
+  /**
+   * Girth was only just over the next size down, and chest, waist and hips fit
+   * that smaller size, so it was recommended instead of the girth size.
+   */
+  | "GIRTH_STEP_DOWN"
   /** Emitted by a declarative per-vendor rule. */
   | "VENDOR_RULE";
 
@@ -139,6 +144,14 @@ export interface SizingOptions {
    * alterable. "chart-literal" takes the smaller size the chart nominally allows.
    */
   boundaryPolicy?: "round-up" | "chart-literal";
+  /**
+   * Girth pushing a dancer up a size can leave everything else far too big -
+   * typically child XXLC to adult SA. When girth is no more than this many inches
+   * over the next size down, and chest, waist and hips fit that smaller size
+   * (and sit well under the bigger one), the smaller size is recommended with a
+   * note to check the torso. 0 turns this off, so girth alone decides.
+   */
+  girthStepDownTolerance?: number;
 }
 
 export const DEFAULT_SIZING_OPTIONS: Required<SizingOptions> = {
@@ -146,11 +159,14 @@ export const DEFAULT_SIZING_OPTIONS: Required<SizingOptions> = {
   borderThreshold: 1.0,
   alterationThreshold: 2.0,
   boundaryPolicy: "round-up",
+  girthStepDownTolerance: 1,
 };
 
 export interface SizingResult {
   /** The recommended vendor size code. */
   size: string;
+  /** Set when the recommendation stepped down from the size girth alone picked. */
+  girthSize?: string;
   ordinal: number;
   /** Girth actually used for matching, after any growth allowance. */
   matchedGirth: number;

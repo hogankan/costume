@@ -134,6 +134,11 @@ export function FitReportTable({
                             was {r.recommendedSize}
                           </span>
                         ) : null}
+                        {r.girthSize ? (
+                          <span className="block text-xs font-normal text-amber-700 dark:text-amber-300">
+                            girth says {r.girthSize}
+                          </span>
+                        ) : null}
                       </span>
                     )}
                   </td>

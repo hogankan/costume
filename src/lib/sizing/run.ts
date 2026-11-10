@@ -93,6 +93,7 @@ export function runSizing(input: RunInput): RunResult {
         costumeName: costume.name,
         colorway: dancer.colorway ?? costume.defaultColorway,
         recommendedSize: result.size,
+        ...(result.girthSize ? { girthSize: result.girthSize } : {}),
         rawGirth: result.rawGirth,
         matchedGirth: result.matchedGirth,
         rationale: result.rationale,
